@@ -1,3 +1,6 @@
 [submodule "3rdparty/TM1637-pico"]
 	path = 3rdparty/TM1637-pico
 	url = https://github.com/wahlencraft/TM1637-pico
+[submodule "3rdparty/pico-sdk"]
+	path = 3rdparty/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git
