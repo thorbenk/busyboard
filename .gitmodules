@@ -1,0 +1,3 @@
+[submodule "3rdparty/TM1637-pico"]
+	path = 3rdparty/TM1637-pico
+	url = https://github.com/wahlencraft/TM1637-pico
