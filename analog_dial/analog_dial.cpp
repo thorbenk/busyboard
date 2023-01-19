@@ -4,6 +4,7 @@ extern "C" {
 #include <PicoTM1637.h>
 }
 #include <cstdio>
+#include <iostream>
 
 #define LED_1 18
 #define LED_2 19
@@ -33,7 +34,6 @@ int main() {
   TM1637_init(DIGITS_CLK_PIN, DIGITS_DIO_PIN);
   TM1637_clear();
   TM1637_set_brightness(3);
-  TM1637_display_word("dEMO", true);
 
   int num = -1;
 
@@ -56,6 +56,7 @@ int main() {
 
     if (dial_in_progress) {
       if (num == -1) {
+        TM1637_clear();
         num = 0;
       };
 
@@ -67,15 +68,18 @@ int main() {
         t2 = tmp;
       }
 
-      if (last_num_switch != num_switched && t2 - t1 > 15 * 1000) {
-        printf("switched %i\n", num);
+      if (last_num_switch != num_switched && t2 - t1 > 5 * 1000) {
         num += 1;
         last_num_switch = num_switched;
       }
     } else {
-      if (display_num != num && num >= 0) {
+      if (display_num != num && num > 0) {
+        num = num / 2;
+        if (num == 10) {
+          num = 0;
+        }
+        TM1637_display(num, false);
         printf("display %i\n", num);
-        TM1637_display(num / 2, false);
         display_num = num;
         num = -1;
         last_num_switch = false;
