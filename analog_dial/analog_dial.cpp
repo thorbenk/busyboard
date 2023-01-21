@@ -3,6 +3,7 @@
 extern "C" {
 #include <PicoTM1637.h>
 }
+#include <PicoLed.hpp>
 #include <cstdio>
 #include <iostream>
 
@@ -12,6 +13,10 @@ extern "C" {
 #define BUTTON_NUMBER_BEEPER 16
 #define DIGITS_CLK_PIN 21
 #define DIGITS_DIO_PIN 20
+
+#define LED_PIN 15
+#define LED_LENGTH 10
+
 
 int main() {
   stdio_init_all();
@@ -34,6 +39,13 @@ int main() {
   TM1637_init(DIGITS_CLK_PIN, DIGITS_DIO_PIN);
   TM1637_clear();
   TM1637_set_brightness(3);
+
+  auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(pio1, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_WGRB);
+  ledStrip.setBrightness(16);
+  ledStrip.clear();
+
+  ledStrip.fill( PicoLed::RGB(255, 0, 0) );
+  ledStrip.show();
 
   int num = -1;
 
@@ -80,6 +92,15 @@ int main() {
         }
         TM1637_display(num, false);
         printf("display %i\n", num);
+        for (int i = 0; i < num; ++i)
+        {
+          ledStrip.setPixelColor(i, PicoLed::RGB(0, 255, 0));
+        }
+        for (int i = num; i < 10; ++i)
+        {
+          ledStrip.setPixelColor(i, PicoLed::RGB(255, 0, 0));
+        }
+        ledStrip.show();
         display_num = num;
         num = -1;
         last_num_switch = false;

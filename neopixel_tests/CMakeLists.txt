@@ -1,0 +1,2 @@
+add_executable(led_example PicoLedExample.cpp)
+target_link_libraries(led_example pico_stdlib PicoLed)
