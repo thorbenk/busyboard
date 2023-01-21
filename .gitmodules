@@ -7,3 +7,6 @@
 [submodule "3rdparty/PicoLed"]
 	path = 3rdparty/PicoLed
 	url = https://github.com/thorbenk/PicoLed.git
+[submodule "3rdparty/pico-dfPlayer"]
+	path = 3rdparty/pico-dfPlayer
+	url = https://github.com/nyh-workshop/pico-dfPlayer.git

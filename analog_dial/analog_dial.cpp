@@ -6,6 +6,7 @@ extern "C" {
 #include <PicoLed.hpp>
 #include <cstdio>
 #include <iostream>
+#include "dfPlayerDriver.h"
 
 #define LED_1 18
 #define LED_2 19
@@ -17,6 +18,9 @@ extern "C" {
 #define LED_PIN 15
 #define LED_LENGTH 10
 
+#define DFPLAYER_UART 1
+#define DFPLAYER_MINI_RX 8 /* GP 8 - TX (UART 1) */
+#define DFPLAYER_MINI_TX 9 /* GP 9 - RX (UART 1) */
 
 int main() {
   stdio_init_all();
@@ -47,6 +51,23 @@ int main() {
   ledStrip.fill( PicoLed::RGB(255, 0, 0) );
   ledStrip.show();
 
+  DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> dfp;
+  // DfPlayerPico dfp;
+
+  dfp.reset();
+  sleep_ms(2000);
+  dfp.specifyVolume(10);
+  sleep_ms(200);
+  //dfp.setRepeatPlay(true);
+  //sleep_ms(200);
+  //for (int i = 0; i < 10; ++i) {
+  //  dfp.next();
+  //  sleep_ms(2000);
+  //}
+
+  ledStrip.fill( PicoLed::RGB(0, 0, 255) );
+  ledStrip.show();
+
   int num = -1;
 
   int display_num = -1;
@@ -55,6 +76,7 @@ int main() {
   bool last_num_switch = false;
 
   while (true) {
+
     int mask = 0;
 
     bool const dial_in_progress = !gpio_get(BUTTON_DIALING_IN_PROGRESS);
@@ -91,6 +113,15 @@ int main() {
           num = 0;
         }
         TM1637_display(num, false);
+
+        uint8_t folder = 1;
+        uint8_t track = static_cast<uint8_t>(num);
+  
+        uint16_t cmd = (folder << 8) | num;
+
+        dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+        printf("%04X\n", cmd);
+        sleep_ms(200);
         printf("display %i\n", num);
         for (int i = 0; i < num; ++i)
         {
