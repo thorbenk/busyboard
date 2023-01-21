@@ -3,10 +3,10 @@
 extern "C" {
 #include <PicoTM1637.h>
 }
+#include "dfPlayerDriver.h"
 #include <PicoLed.hpp>
 #include <cstdio>
 #include <iostream>
-#include "dfPlayerDriver.h"
 
 #define LED_1 18
 #define LED_2 19
@@ -44,11 +44,12 @@ int main() {
   TM1637_clear();
   TM1637_set_brightness(3);
 
-  auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(pio1, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_WGRB);
+  auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
+      pio1, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_WGRB);
   ledStrip.setBrightness(16);
   ledStrip.clear();
 
-  ledStrip.fill( PicoLed::RGB(255, 0, 0) );
+  ledStrip.fill(PicoLed::RGB(255, 0, 0));
   ledStrip.show();
 
   DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> dfp;
@@ -58,14 +59,14 @@ int main() {
   sleep_ms(2000);
   dfp.specifyVolume(10);
   sleep_ms(200);
-  //dfp.setRepeatPlay(true);
-  //sleep_ms(200);
-  //for (int i = 0; i < 10; ++i) {
-  //  dfp.next();
-  //  sleep_ms(2000);
-  //}
+  // dfp.setRepeatPlay(true);
+  // sleep_ms(200);
+  // for (int i = 0; i < 10; ++i) {
+  //   dfp.next();
+  //   sleep_ms(2000);
+  // }
 
-  ledStrip.fill( PicoLed::RGB(0, 0, 255) );
+  ledStrip.fill(PicoLed::RGB(0, 0, 255));
   ledStrip.show();
 
   int num = -1;
@@ -116,19 +117,17 @@ int main() {
 
         uint8_t folder = 1;
         uint8_t track = static_cast<uint8_t>(num);
-  
+
         uint16_t cmd = (folder << 8) | num;
 
         dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
         printf("%04X\n", cmd);
         sleep_ms(200);
         printf("display %i\n", num);
-        for (int i = 0; i < num; ++i)
-        {
+        for (int i = 0; i < num; ++i) {
           ledStrip.setPixelColor(i, PicoLed::RGB(0, 255, 0));
         }
-        for (int i = num; i < 10; ++i)
-        {
+        for (int i = num; i < 10; ++i) {
           ledStrip.setPixelColor(i, PicoLed::RGB(255, 0, 0));
         }
         ledStrip.show();
