@@ -22,7 +22,10 @@ extern "C" {
 #define PHONE_LEDS_LENGTH 10
 
 #define FAN_LEDS_DATA_PIN 14
+#define FAN_LEDS_PWM_PIN 13
 #define FAN_LEDS_LENGTH 6
+
+#define TEST_LED_DATA_PIN 10
 
 #define DFPLAYER_UART 1
 #define DFPLAYER_MINI_RX 8 /* GP 8 - TX (UART 1) */
@@ -72,10 +75,16 @@ int main() {
 
   gpio_set_function(LED_FADER, GPIO_FUNC_PWM);
   uint const led_fade_slice_num = pwm_gpio_to_slice_num(LED_FADER);
+  pwm_config led_fade_pwm_config = pwm_get_default_config();
+  pwm_config_set_wrap(&led_fade_pwm_config, 4095);
+  pwm_init(led_fade_slice_num, &led_fade_pwm_config, true);
 
-  pwm_config config = pwm_get_default_config();
-  pwm_config_set_wrap(&config, 4095);
-  pwm_init(led_fade_slice_num, &config, true);
+  gpio_set_function(FAN_LEDS_PWM_PIN, GPIO_FUNC_PWM);
+  uint const fan_pwm_slice_num = pwm_gpio_to_slice_num(FAN_LEDS_PWM_PIN);
+  pwm_config fan_pwm_config = pwm_get_default_config();
+  pwm_set_clkdiv(fan_pwm_slice_num, 20.f);
+  pwm_config_set_wrap(&fan_pwm_config, 255);
+  pwm_init(fan_pwm_slice_num, &fan_pwm_config, true);
 
   int const led_pins = (1 << LED_2);
 
@@ -96,6 +105,13 @@ int main() {
   fan_leds.clear();
   fan_leds.fill(PicoLed::RGB(0, 255, 0));
   fan_leds.show();
+
+  auto test_led = PicoLed::addLeds<PicoLed::WS2812B>(
+      pio1, 2, TEST_LED_DATA_PIN, 1, PicoLed::FORMAT_RGB);
+  test_led.setBrightness(255);
+  test_led.clear();
+  test_led.fill(PicoLed::RGB(0, 0, 255));
+  test_led.show();
 
   DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> dfp;
   dfp.reset();
@@ -139,6 +155,17 @@ int main() {
       fan_leds.show();
 
       pwm_set_gpio_level(LED_FADER, result);
+
+      // Lowest speed should be 10%
+      // The PWM is inverted: 
+      uint8_t fan_pwm = static_cast<uint8_t>(std::max(25.5f, f * 255.f));
+
+      printf("fan pwm = %d\n", fan_pwm);
+
+      pwm_set_gpio_level(FAN_LEDS_PWM_PIN, fan_pwm);
+
+      test_led.fill(PicoLed::RGB(R, G, B));
+      test_led.show();
     }
 
     int mask = 0;
