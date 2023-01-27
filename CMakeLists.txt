@@ -11,3 +11,4 @@ include("3rdparty/PicoLed/PicoLed.cmake")
 
 add_subdirectory(neopixel_tests)
 add_subdirectory(analog_dial)
+add_subdirectory(vid28-05)

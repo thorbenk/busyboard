@@ -1,0 +1,4 @@
+add_executable(motor_vid28 motor_vid28.cpp)
+target_link_libraries(motor_vid28 pico_stdlib hardware_pwm)
+pico_enable_stdio_usb(motor_vid28 0)
+pico_enable_stdio_uart(motor_vid28 1)

@@ -33,6 +33,116 @@ extern "C" {
 
 #define SLIDE_POT_GPIO 26
 
+#define BUTTON_A_PIN 12
+#define BUTTON_B_PIN 11
+
+static const char *gpio_irq_str[] = {
+    "LEVEL_LOW",  // 0x1
+    "LEVEL_HIGH", // 0x2
+    "EDGE_FALL",  // 0x4
+    "EDGE_RISE"   // 0x8
+};
+
+static char event_str[128];
+
+void gpio_event_string(char *buf, uint32_t events) {
+  for (uint i = 0; i < 4; i++) {
+    uint mask = (1 << i);
+    if (events & mask) {
+      // Copy this event string into the user string
+      const char *event_str = gpio_irq_str[i];
+      while (*event_str != '\0') {
+        *buf++ = *event_str++;
+      }
+      events &= ~mask;
+
+      // If more events add ", "
+      if (events) {
+        *buf++ = ',';
+        *buf++ = ' ';
+      }
+    }
+  }
+  *buf++ = '\0';
+}
+
+static uint8_t partial_mode[3][6] = {
+    {1, 0, 0, 0, 1, 1}, {0, 0, 1, 1, 1, 0}, {1, 1, 1, 0, 0, 0}};
+
+template <uint8_t PIN_1, uint8_t PIN_2_3, uint8_t PIN_4> class Vid28Stepper {
+public:
+  Vid28Stepper() = default;
+  void init() {
+    gpio_init(PIN_1);
+    gpio_set_dir(PIN_1, GPIO_OUT);
+    gpio_init(PIN_2_3);
+    gpio_set_dir(PIN_2_3, GPIO_OUT);
+    gpio_init(PIN_4);
+    gpio_set_dir(PIN_4, GPIO_OUT);
+  }
+  void step_up() {
+    for (auto i = 0; i < 6; ++i) {
+      auto a = partial_mode[0][i];
+      auto b = partial_mode[1][i];
+      auto c = partial_mode[2][i];
+      std::cout << "step " << i << ": " << (int)a << " " << (int)b << " "
+                << (int)c << std::endl;
+
+      gpio_put(PIN_1, partial_mode[0][i]);
+      gpio_put(PIN_2_3, partial_mode[1][i]);
+      gpio_put(PIN_4, partial_mode[2][i]);
+      sleep_ms(2000);
+    }
+    gpio_put(PIN_1, 0);
+    gpio_put(PIN_2_3, 0);
+    gpio_put(PIN_4, 0);
+  }
+  void step_down() {
+    for (auto i = 0; i < 6; ++i) {
+      std::cout << "step " << i << std::endl;
+      gpio_put(PIN_1, partial_mode[0][5 - i]);
+      gpio_put(PIN_2_3, partial_mode[1][5 - i]);
+      gpio_put(PIN_4, partial_mode[2][5 - i]);
+      sleep_ms(2000);
+    }
+    gpio_put(PIN_1, 0);
+    gpio_put(PIN_2_3, 0);
+    gpio_put(PIN_4, 0);
+  }
+  void test() {
+    gpio_put(PIN_1, 1);
+    gpio_put(PIN_2_3, 1);
+    gpio_put(PIN_4, 1);
+  }
+
+private:
+};
+
+class Debounce {
+public:
+  Debounce() = default;
+  bool edge_is_significant() {
+    if (time_ == 0) {
+      time_ = time_us_32();
+      return true;
+    } else if (time_us_32() > time_ + 200 * 1000) {
+      time_ = time_us_32();
+      return true;
+    } else {
+      time_ = time_us_32();
+      return false;
+    }
+  }
+
+private:
+  uint32_t time_ = 0;
+};
+
+Debounce button_a_debounce;
+Debounce button_b_debounce;
+Vid28Stepper<5, 4, 3> stepper;
+uint8_t should_step = 0;
+
 // See
 auto hsv_to_rgb(float H, float S, float V) -> std::tuple<float, float, float> {
   float h = std::floor(H / 60.f);
@@ -56,6 +166,19 @@ auto hsv_to_rgb(float H, float S, float V) -> std::tuple<float, float, float> {
   return std::make_tuple(0, 0, 0);
 }
 
+void gpio_callback(uint gpio, uint32_t events) {
+  auto m = to_ms_since_boot(get_absolute_time());
+  if (gpio == BUTTON_A_PIN && button_a_debounce.edge_is_significant()) {
+    gpio_event_string(event_str, events);
+    printf("[%d] BUTTON A: GPIO %d: %s\n", m, gpio, event_str);
+    should_step = 1;
+  } else if (gpio == BUTTON_B_PIN && button_b_debounce.edge_is_significant()) {
+    gpio_event_string(event_str, events);
+    printf("[%d] BUTTON B: GPIO %d: %s\n", m, gpio, event_str);
+    should_step = 2;
+  }
+}
+
 int main() {
   stdio_init_all();
   adc_init();
@@ -72,6 +195,18 @@ int main() {
   gpio_init(BUTTON_NUMBER_BEEPER);
   gpio_set_dir(BUTTON_NUMBER_BEEPER, GPIO_IN);
   gpio_pull_up(BUTTON_NUMBER_BEEPER);
+
+  gpio_init(BUTTON_A_PIN);
+  gpio_set_dir(BUTTON_A_PIN, GPIO_IN);
+  gpio_pull_up(BUTTON_A_PIN);
+  gpio_set_irq_enabled_with_callback(BUTTON_A_PIN, GPIO_IRQ_EDGE_FALL, true,
+                                     &gpio_callback);
+
+  gpio_init(BUTTON_B_PIN);
+  gpio_set_dir(BUTTON_B_PIN, GPIO_IN);
+  gpio_pull_up(BUTTON_B_PIN);
+  gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, GPIO_IRQ_EDGE_FALL, true,
+                                     &gpio_callback);
 
   gpio_set_function(LED_FADER, GPIO_FUNC_PWM);
   uint const led_fade_slice_num = pwm_gpio_to_slice_num(LED_FADER);
@@ -106,8 +241,8 @@ int main() {
   fan_leds.fill(PicoLed::RGB(0, 255, 0));
   fan_leds.show();
 
-  auto test_led = PicoLed::addLeds<PicoLed::WS2812B>(
-      pio1, 2, TEST_LED_DATA_PIN, 1, PicoLed::FORMAT_RGB);
+  auto test_led = PicoLed::addLeds<PicoLed::WS2812B>(pio1, 2, TEST_LED_DATA_PIN,
+                                                     1, PicoLed::FORMAT_RGB);
   test_led.setBrightness(255);
   test_led.clear();
   test_led.fill(PicoLed::RGB(0, 0, 255));
@@ -122,6 +257,8 @@ int main() {
   phone_dial_leds.fill(PicoLed::RGB(0, 0, 255));
   phone_dial_leds.show();
 
+  stepper.init();
+
   int num = -1;
 
   int display_num = -1;
@@ -131,13 +268,26 @@ int main() {
 
   auto T = time_us_32();
 
+  std::cout << "button A" << gpio_get(BUTTON_A_PIN) << std::endl;
+  std::cout << "button B" << gpio_get(BUTTON_B_PIN) << std::endl;
+
   while (true) {
+    if (should_step > 0) {
+      if (should_step == 1) {
+        std::cout << "step up" << std::endl;
+        stepper.step_up();
+      } else if (should_step == 2) {
+        std::cout << "step down" << std::endl;
+        stepper.step_down();
+      }
+      // stepper.test();
+      should_step = 0;
+    }
 
     if (time_us_32() > 100 * 1000 + T) {
       T = time_us_32();
       uint16_t const result = adc_read();
       float const f = result / 4096.f;
-      printf("slider at %f\n", f);
 
       float const h = f * 360.f;
       float const s = 1.f;
@@ -149,18 +299,18 @@ int main() {
       uint8_t G = 255 * g;
       uint8_t B = 255 * b;
 
-      printf("R=%d, G=%d, B=%d\n", R, G, B);
-
       fan_leds.fill(PicoLed::RGB(R, G, B));
       fan_leds.show();
 
       pwm_set_gpio_level(LED_FADER, result);
 
       // Lowest speed should be 10%
-      // The PWM is inverted: 
+      // The PWM is inverted:
       uint8_t fan_pwm = static_cast<uint8_t>(std::max(25.5f, f * 255.f));
 
-      printf("fan pwm = %d\n", fan_pwm);
+      // printf("slider at %f\n", f);
+      // printf("R=%d, G=%d, B=%d\n", R, G, B);
+      // printf("fan pwm = %d\n", fan_pwm);
 
       pwm_set_gpio_level(FAN_LEDS_PWM_PIN, fan_pwm);
 
