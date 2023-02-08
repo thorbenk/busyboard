@@ -1,0 +1,2 @@
+add_executable(arcade_rgb_button arcade_rgb_button.cpp)
+target_link_libraries(arcade_rgb_button pico_stdlib PicoLed)
