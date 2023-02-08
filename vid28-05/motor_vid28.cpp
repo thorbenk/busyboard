@@ -74,13 +74,14 @@ public:
     for (uint8_t i = 0; i < 3; ++i) {
       uint8_t const level = microsteps_sine_[current_microstep_[i]];
 
-      //if (i == 0) {
-      //  std::cout << "level @ " << (int)current_microstep_[i] << " : " << (int)level << ", [V 3.3] = " << 3.3f * float(level)/127.0 << std::endl;
-      //}
+      // if (i == 0) {
+      //   std::cout << "level @ " << (int)current_microstep_[i] << " : " <<
+      //   (int)level << ", [V 3.3] = " << 3.3f * float(level)/127.0 <<
+      //   std::endl;
+      // }
       if (forward)
         current_microstep_[i] = (current_microstep_[i] + 1) % 24;
-      else
-      {
+      else {
         if (current_microstep_[i] == 0)
           current_microstep_[i] = 23;
         else
@@ -200,19 +201,19 @@ int main() {
       if (should_step == 1) {
         std::cout << "step up" << std::endl;
         // stepper.step_up();
-        for (int i = 0; i < 50*24; ++i) {
+        for (int i = 0; i < 50 * 24; ++i) {
           stepper.microstep(true);
           sleep_ms(1);
-          //sleep_us(500);
+          // sleep_us(500);
         }
         std::cout << "step up done" << std::endl;
       } else if (should_step == 2) {
         std::cout << "step down" << std::endl;
         // stepper.step_down();
-        for (int i = 0; i < 50*24; ++i) {
+        for (int i = 0; i < 50 * 24; ++i) {
           stepper.microstep(false);
           sleep_ms(1);
-          //sleep_us(500);
+          // sleep_us(500);
         }
         std::cout << "step down done" << std::endl;
       }
