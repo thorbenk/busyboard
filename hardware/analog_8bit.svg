@@ -45,5 +45,6 @@
   <line stroke="rgb(0,0,0)" stroke-width="1" x1="153.18880328977198" x2="159.93523575034007" y1="161.83563787374493" y2="163.7026271760692"/>
   <line stroke="rgb(0,0,0)" stroke-width="3" x1="151.19397662556435" x2="160.4327719506772" y1="167.6341716182545" y2="171.4610059419054"/>
   <text alignment-baseline="middle" style="font-size:8; font-family:Roboto" text-anchor="middle" transform="rotate(112.5, 162.28053101569978, 172.22637280663557)" x="162.28053101569978" y="172.22637280663557">256</text>
-  <rect fill="none" height="117.72637280663557" rx="10" ry="10" stroke="rgb(0,0,0)" width="155.4029061073524" x="27.29854694632379" y="70.5"/>
+  <rect fill="none" height="125.72637280663557" rx="10" ry="10" stroke="rgb(0,0,0)" width="163.4029061073524" x="23.29854694632379" y="66.5"/>
+  <rect fill="none" height="14" stroke="rgb(0,0,0)" width="30" x="90.0" y="163.5"/>
 </svg>

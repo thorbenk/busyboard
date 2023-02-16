@@ -44,8 +44,11 @@ major_tick_thickness = 3
 minor_tick_thickness = 1
 label_offset = 2
 font_size = 8
-window_padding = 16
+window_padding = 20
 window_rounding = 10
+lcd_width = 30
+lcd_height = 14
+lcd_y_offset = 15
 # ---
 
 A4 = np.asarray((210.0, 297.0))
@@ -91,6 +94,15 @@ dwg.add(
         fill="none",
         rx=window_rounding,
         ry=window_rounding,
+        stroke=black,
+    )
+)
+
+dwg.add(
+    dwg.rect(
+        A4_center + np.asarray((-lcd_width/2, lcd_y_offset)),
+        (lcd_width, lcd_height),
+        fill="none",
         stroke=black,
     )
 )
