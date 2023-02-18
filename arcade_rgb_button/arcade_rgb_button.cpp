@@ -8,7 +8,7 @@
 #include "debounce.h"
 
 #define LED_PIN 13
-#define LED_LENGTH 8
+#define LED_LENGTH 9
 #define BUTTON_PIN 12
 
 Debounce debounce(BUTTON_PIN, 4);
@@ -62,10 +62,10 @@ auto hsv_to_rgb(float H, float S, float V) -> std::tuple<float, float, float> {
 struct State {
   bool button = false;
   uint32_t tick = 0;
-  PicoLed::Color button_color[8];
+  PicoLed::Color button_color[LED_LENGTH];
 };
 
-float led_hues[8];
+float led_hues[LED_LENGTH];
 
 State state;
 volatile bool state_changed = true;
@@ -90,17 +90,17 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
   uint8_t v = 32 + 128 * (f / static_cast<float>(duration_frames_2));
 
   if (state.tick % (2 * FPS) == 0) {
-    std::rotate(led_hues, led_hues + 1, led_hues + 8);
+    std::rotate(led_hues, led_hues + 1, led_hues + LED_LENGTH);
   }
 
   if (state.button) {
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < LED_LENGTH; ++i) {
       float h = led_hues[i];
       auto const [r, g, b] = hsv_to_rgb(h, 1.0, v);
       state.button_color[i] = PicoLed::RGB(r, g, b);
     }
   } else {
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < LED_LENGTH; ++i) {
       float h = led_hues[i];
       auto const [r, g, b] = hsv_to_rgb(h, 1.0, 1.0);
       state.button_color[i] = PicoLed::RGB(r, g, b);
@@ -115,8 +115,8 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
 int main() {
   stdio_init_all();
 
-  for (int i = 0; i < 8; ++i) {
-    led_hues[i] = i / 8.f * 360.f;
+  for (int i = 0; i < LED_LENGTH; ++i) {
+    led_hues[i] = i / static_cast<float>(LED_LENGTH) * 360.f;
   }
 
 #ifdef MEASURE_BOUNCE_TIMES
@@ -140,7 +140,7 @@ int main() {
                                      true, &gpio_callback);
 
   auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
-      pio0, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_GRB);
+      pio0, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_WGRB);
   ledStrip.setBrightness(255);
   ledStrip.clear();
 
@@ -183,7 +183,7 @@ int main() {
 
     if (state_changed) {
       state_changed = false;
-      for (int i = 0; i < 8; ++i) {
+      for (int i = 0; i < LED_LENGTH; ++i) {
         ledStrip.setPixelColor(i, state.button_color[i]);
       }
       ledStrip.show();
