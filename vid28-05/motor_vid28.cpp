@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <iostream>
 
+#include "vid2805.h"
+
 #define BUTTON_A_PIN 6
 #define BUTTON_B_PIN 7
 #define VID28_SHAFT1_PIN1 2
@@ -41,6 +43,7 @@ void gpio_event_string(char *buf, uint32_t events) {
   *buf++ = '\0';
 }
 
+#if 0
 static uint8_t partial_mode[3][6] = {
     {1, 0, 0, 0, 1, 1}, {0, 0, 1, 1, 1, 0}, {1, 1, 1, 0, 0, 0}};
 
@@ -140,6 +143,7 @@ uint8_t Vid28Stepper<PIN_1, PIN_2_3, PIN_4,
                      USE_MICROSTEPPING>::microsteps_sine_[24] = {
     114, 102, 88, 72, 55, 39, 25,  13,  5,   1,   1,   5,
     13,  25,  39, 55, 72, 88, 102, 114, 122, 126, 126, 122};
+#endif
 
 class Debounce {
 public:
@@ -163,8 +167,7 @@ private:
 
 Debounce button_a_debounce;
 Debounce button_b_debounce;
-Vid28Stepper<VID28_SHAFT1_PIN1, VID28_SHAFT1_PIN23, VID28_SHAFT1_PIN4, true>
-    stepper;
+Vid28Stepper<VID28_SHAFT1_PIN1, VID28_SHAFT1_PIN23, VID28_SHAFT1_PIN4> stepper;
 volatile uint8_t should_step = 0;
 
 void gpio_callback(uint gpio, uint32_t events) {
@@ -194,33 +197,46 @@ int main() {
   gpio_pull_up(BUTTON_B_PIN);
   gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, GPIO_IRQ_EDGE_FALL, true,
                                      &gpio_callback);
+  bool left = true;
+  bool right = false;
+  // angle between number N and N + 1
+  float angle_step = (180 + 45)/256.f; // degrees
+  //float angle_dial_start = 40;
+  float angle_dial_start = 40;
+  float speed = 0.125;
 
   stepper.init();
+
+  stepper.reset(1, speed);
+  stepper.set_zero(-angle_dial_start);
+
+  std::cout << "reset done" << std::endl;
+  sleep_ms(1000);
+
+  while (true) {
+    int s = 64;
+    for (int i = 0; i <= 256; i += s) {
+        stepper.step_to(-i*angle_step, speed);
+        sleep_ms(250);
+    }
+  }
+
+#if 0
   while (true) {
     if (should_step > 0) {
       if (should_step == 1) {
         std::cout << "step up" << std::endl;
-        // stepper.step_up();
-        for (int i = 0; i < 50 * 24; ++i) {
-          stepper.microstep(true);
-          sleep_ms(1);
-          // sleep_us(500);
-        }
+        stepper.step(8*angle_step, 1, right);
         std::cout << "step up done" << std::endl;
       } else if (should_step == 2) {
         std::cout << "step down" << std::endl;
-        // stepper.step_down();
-        for (int i = 0; i < 50 * 24; ++i) {
-          stepper.microstep(false);
-          sleep_ms(1);
-          // sleep_us(500);
-        }
+        stepper.step(8*angle_step, 1, right);
         std::cout << "step down done" << std::endl;
       }
-      // stepper.test();
       should_step = 0;
     }
   }
+#endif
 
   return 0;
 }
