@@ -1,0 +1,4 @@
+add_executable(seven_segment_display seven_segment_display.cpp)
+target_link_libraries(seven_segment_display pico_stdlib PicoTM1637)
+pico_enable_stdio_usb(seven_segment_display 0)
+pico_enable_stdio_uart(seven_segment_display 1)

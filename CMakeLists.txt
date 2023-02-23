@@ -8,5 +8,6 @@ set(PICO_CXX_ENABLE_RTTI 1)
 pico_sdk_init()
 
 include("3rdparty/PicoLed/PicoLed.cmake")
+include("3rdparty/TM1637-pico/PicoTM1637.cmake")
 
 add_subdirectory(parts)
