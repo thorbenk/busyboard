@@ -1,51 +1,50 @@
-#include <stdio.h>
 #include "pico/stdlib.h"
+#include <stdio.h>
 
-#include <PicoLed.hpp>
-#include <Effects/Marquee.hpp>
-#include <Effects/Stars.hpp>
-#include <Effects/Comet.hpp>
 #include <Effects/Bounce.hpp>
+#include <Effects/Comet.hpp>
+#include <Effects/Marquee.hpp>
 #include <Effects/Particles.hpp>
+#include <Effects/Stars.hpp>
+#include <PicoLed.hpp>
 
 #define LED_PIN 15
 #define LED_LENGTH 10
 
-int main()
-{
-    stdio_init_all();
+int main() {
+  stdio_init_all();
 
-    printf("0. Initialize LED strip\n");
-    auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(pio0, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_WGRB);
-    ledStrip.setBrightness(16);
-    ledStrip.clear();
+  printf("0. Initialize LED strip\n");
+  auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
+      pio0, 0, LED_PIN, LED_LENGTH, PicoLed::FORMAT_WGRB);
+  ledStrip.setBrightness(16);
+  ledStrip.clear();
 
-    while (true) {
-      // 1. Set all LEDs to red!
-      printf("1. Set all LEDs to red!\n");
-      ledStrip.fill( PicoLed::RGB(255, 0, 0) );
-      ledStrip.show();
-      sleep_ms(5000);
+  while (true) {
+    // 1. Set all LEDs to red!
+    printf("1. Set all LEDs to red!\n");
+    ledStrip.fill(PicoLed::RGB(255, 0, 0));
+    ledStrip.show();
+    sleep_ms(5000);
 
-      // 2. Set all LEDs to green!
-      printf("2. Set all LEDs to green!\n");
-      ledStrip.fill( PicoLed::RGB(0, 255, 0) );
-      ledStrip.show();
-      sleep_ms(5000);
+    // 2. Set all LEDs to green!
+    printf("2. Set all LEDs to green!\n");
+    ledStrip.fill(PicoLed::RGB(0, 255, 0));
+    ledStrip.show();
+    sleep_ms(5000);
 
-      // 3. Set all LEDs to blue!
-      printf("3. Set all LEDs to blue!\n");
-      ledStrip.fill( PicoLed::RGB(0, 0, 255) );
-      ledStrip.show();
-      sleep_ms(5000);
+    // 3. Set all LEDs to blue!
+    printf("3. Set all LEDs to blue!\n");
+    ledStrip.fill(PicoLed::RGB(0, 0, 255));
+    ledStrip.show();
+    sleep_ms(5000);
 
-      // 4. Set half LEDs to red and half to blue!
-      printf("4. Set gradient from red to blue!\n");
-      ledStrip.fillGradient( PicoLed::RGB(255, 0, 0), PicoLed::RGB(0, 0, 255) );
-      ledStrip.show();
-      sleep_ms(5000);
-
-    }
+    // 4. Set half LEDs to red and half to blue!
+    printf("4. Set gradient from red to blue!\n");
+    ledStrip.fillGradient(PicoLed::RGB(255, 0, 0), PicoLed::RGB(0, 0, 255));
+    ledStrip.show();
+    sleep_ms(5000);
+  }
 
 #if 0
     // 5. Set half LEDs to red and half to blue!
@@ -170,5 +169,5 @@ int main()
     }
 */
 #endif
-    return 0;
+  return 0;
 }

@@ -200,8 +200,8 @@ int main() {
   bool left = true;
   bool right = false;
   // angle between number N and N + 1
-  float angle_step = (180 + 45)/256.f; // degrees
-  //float angle_dial_start = 40;
+  float angle_step = (180 + 45) / 256.f; // degrees
+  // float angle_dial_start = 40;
   float angle_dial_start = 40;
   float speed = 0.125;
 
@@ -216,8 +216,8 @@ int main() {
   while (true) {
     int s = 64;
     for (int i = 0; i <= 256; i += s) {
-        stepper.step_to(-i*angle_step, speed);
-        sleep_ms(250);
+      stepper.step_to(-i * angle_step, speed);
+      sleep_ms(250);
     }
   }
 

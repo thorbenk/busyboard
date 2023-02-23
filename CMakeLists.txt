@@ -9,7 +9,4 @@ pico_sdk_init()
 
 include("3rdparty/PicoLed/PicoLed.cmake")
 
-add_subdirectory(neopixel_tests)
-add_subdirectory(analog_dial)
-add_subdirectory(vid28-05)
-add_subdirectory(arcade_rgb_button)
+add_subdirectory(parts)

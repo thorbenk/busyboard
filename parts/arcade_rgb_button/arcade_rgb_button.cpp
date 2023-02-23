@@ -8,7 +8,7 @@
 #include "debounce.h"
 
 #define LED_PIN 13
-#define LED_LENGTH 9
+#define LED_LENGTH 8
 #define BUTTON_PIN 12
 
 Debounce debounce(BUTTON_PIN, 4);
