@@ -1,4 +1,5 @@
 #pragma once
+#include "hardware/i2c.h"
 #include "pico/stdlib.h"
 
 int64_t debounce_alarm(alarm_id_t id, void *user_data);
@@ -20,4 +21,51 @@ public:
   uint pin_;
   uint32_t debounce_ms_ = 4;
   volatile bool state_ = true;
+};
+
+class Debounce_PCF8575 {
+public:
+  Debounce_PCF8575(i2c_inst_t *i2c, uint8_t addr, uint32_t debounce_ms);
+  void on_pcf8575_interrupt() { needs_update_ = true; }
+
+  auto loop() -> bool;
+  auto state() const -> uint16_t { return debounced_state_; };
+
+private:
+  inline auto timed_out(uint8_t i, uint64_t now) const -> bool {
+    return now > 0 && now - debounce_timers_[i] > debounce_ms_ * 1000;
+  }
+  inline auto is_stopped(uint8_t i) const -> bool {
+    return debounce_timers_[i] == 0;
+  }
+  inline auto start_timer(uint8_t i, uint64_t now) -> void {
+    debounce_timers_[i] = now;
+  }
+  inline auto stop_timer(uint8_t i) -> void { debounce_timers_[i] = 0; }
+  inline auto timed_out_mask(uint64_t now) {
+    uint16_t timeout_mask = 0;
+    for (uint8_t i = 0; i < 16; ++i) {
+      if (timed_out(i, now)) {
+        timeout_mask |= (1 << i);
+      }
+    }
+    return timeout_mask;
+  }
+  inline auto set_debounced(uint8_t i, bool state) {
+    if (state)
+      debounced_state_ |= (1 << i);
+    else
+      debounced_state_ &= ~(1 << i);
+  }
+
+  i2c_inst_t *i2c_;
+  uint8_t i2c_address_;
+
+  volatile bool needs_update_ = true;
+  uint32_t const debounce_ms_ = 4;
+  uint16_t debounced_state_ = 0;
+
+  // A zero means: No timer running.
+  // A positive value gives the start time of the timer in usec since boot.
+  uint64_t debounce_timers_[16];
 };

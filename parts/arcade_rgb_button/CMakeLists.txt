@@ -4,4 +4,8 @@ add_executable(arcade_rgb_button
   ${PROJECT_SOURCE_DIR}/color.cpp
 )
 target_include_directories(arcade_rgb_button PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(arcade_rgb_button pico_stdlib PicoLed)
+target_link_libraries(arcade_rgb_button  
+  pico_stdlib 
+  hardware_i2c 
+  PicoLed
+)
