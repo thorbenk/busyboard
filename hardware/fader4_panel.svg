@@ -72,19 +72,19 @@
        x="133.79565"
        y="65.214325" />
     <rect
-       style="display:inline;fill:#ffc0c0;fill-opacity:1;stroke:#000000;stroke-width:0.124611;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect2167-5-3-6"
-       width="19.875389"
-       height="20.000389"
-       x="75.670654"
-       y="106.77682" />
-    <rect
-       style="display:inline;fill:#ffc0c0;fill-opacity:1;stroke:#000000;stroke-width:0.124611;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;fill:#ffc0c0;fill-opacity:1;stroke:#000000;stroke-width:0.152122;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect2167-5-3-6-2"
-       width="19.875389"
-       height="20.000389"
-       x="75.670654"
-       y="23.651827" />
+       width="19.847878"
+       height="29.847878"
+       x="75.68441"
+       y="13.790584" />
+    <rect
+       style="display:inline;fill:#ffc0c0;fill-opacity:1;stroke:#000000;stroke-width:0.152122;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect2167-5-3-6-2-9"
+       width="19.847878"
+       height="29.847878"
+       x="75.68441"
+       y="106.79058" />
     <rect
        style="display:inline;fill:#ffc0c0;fill-opacity:1;stroke:#000000;stroke-width:0.124611;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect2167-5-3-5"
@@ -99,13 +99,13 @@
      inkscape:label="Layer 3"
      style="display:inline">
     <rect
-       style="fill:none;fill-opacity:0.207843;stroke:#000000;stroke-width:0.118524;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="fill:none;fill-opacity:0.207843;stroke:#000000;stroke-width:0.1293;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect4282"
-       width="132.88147"
-       height="103.33931"
-       x="20.792618"
-       y="23.664984"
-       ry="13.680101" />
+       width="132.8707"
+       height="122.9933"
+       x="20.798006"
+       y="13.682644"
+       ry="16.281906" />
   </g>
   <g
      inkscape:label="Layer 1"
