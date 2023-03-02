@@ -23,16 +23,20 @@
      inkscape:pagecheckerboard="0"
      inkscape:document-units="mm"
      showgrid="false"
-     inkscape:zoom="1.3480463"
-     inkscape:cx="272.24584"
-     inkscape:cy="239.23511"
+     inkscape:zoom="1.9064254"
+     inkscape:cx="259.64825"
+     inkscape:cy="241.02701"
      inkscape:window-width="1366"
      inkscape:window-height="719"
      inkscape:window-x="0"
      inkscape:window-y="25"
      inkscape:window-maximized="1"
      inkscape:current-layer="layer1"
-     inkscape:snap-center="true" />
+     inkscape:snap-center="true"
+     inkscape:snap-bbox="true"
+     inkscape:snap-bbox-edge-midpoints="false"
+     inkscape:bbox-nodes="false"
+     inkscape:bbox-paths="true" />
   <defs
      id="defs58692" />
   <g
@@ -47,7 +51,7 @@
        x="38.904171"
        y="38.341274" />
     <rect
-       style="fill:none;fill-opacity:0.568928;stroke:#0019ff;stroke-width:0.200701;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       style="fill:none;fill-opacity:0.568928;stroke:#0003ff;stroke-width:0.200701;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect60002"
        width="24.799299"
        height="49.799301"
@@ -122,12 +126,11 @@
          style="font-size:2.11667px;stroke-width:0.264583"
          x="36.549793"
          y="92.382347">3mm</tspan></text>
-    <circle
-       style="fill:none;stroke:#ff0000;stroke-width:0.211319;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+    <path
        id="path59353"
-       cx="63.792965"
-       cy="63.230061"
-       r="24.894341" />
+       style="fill:none;stroke:#ff0000;stroke-width:0.878555;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="M 189.67188 127.22461 L 189.67188 149.18164 A 103.49773 103.49773 0 0 0 151.25195 187.65625 L 129.80664 187.65625 L 129.80664 290.38672 L 151.29492 290.38672 A 103.49773 103.49773 0 0 0 189.23047 328.53125 L 189.23047 350.84766 L 292.31055 350.84766 L 292.31055 328.90039 A 103.49773 103.49773 0 0 0 330.7793 290.65039 L 352.66992 290.65039 L 352.66992 187.39062 L 330.82422 187.39062 A 103.49773 103.49773 0 0 0 292.54297 149.17383 L 292.54297 127.22461 L 189.67188 127.22461 z "
+       transform="scale(0.26458333)" />
     <ellipse
        style="fill:none;stroke:#ff0000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="path59183-4"
