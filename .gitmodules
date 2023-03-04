@@ -13,3 +13,6 @@
 [submodule "3rdparty/inkscape-gears-dev"]
 	path = 3rdparty/inkscape-gears-dev
 	url = https://github.com/jnweiger/inkscape-gears-dev
+[submodule "3rdparty/plakativ"]
+	path = 3rdparty/plakativ
+	url = https://gitlab.mister-muffin.de/josch/plakativ
