@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg42238"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="fan.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview42240"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="0.47660634"
+     inkscape:cx="304.23431"
+     inkscape:cy="376.62109"
+     inkscape:window-width="1366"
+     inkscape:window-height="719"
+     inkscape:window-x="0"
+     inkscape:window-y="25"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:snap-bbox="true"
+     inkscape:snap-bbox-midpoints="true" />
+  <defs
+     id="defs42235" />
+  <g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="measurements"
+     style="display:none">
+    <rect
+       style="font-size:123.472px;line-height:1.25;fill:none;fill-opacity:0.109522;stroke:#ababab;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.997091"
+       id="rect35571"
+       width="104.41506"
+       height="104.41506"
+       x="41.224743"
+       y="36.416023" />
+  </g>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="font-size:123.472px;line-height:1.25;fill:none;fill-opacity:0.109522;stroke:#000000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:0.2,0.2;stroke-dashoffset:0;stroke-opacity:0.997091"
+       id="rect35423"
+       width="119.03721"
+       height="119.0372"
+       x="33.91367"
+       y="29.104952"
+       ry="0" />
+    <ellipse
+       style="font-size:123.472px;line-height:1.25;fill:none;fill-opacity:0.109522;stroke:#000000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.999178"
+       id="path36595"
+       cx="93.432274"
+       cy="88.62355"
+       rx="22.1099"
+       ry="22.109898" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       x="62.672787"
+       y="49.627338"
+       id="text36696"><tspan
+         sodipodi:role="line"
+         style="font-size:3.52778px;stroke-width:0.264583"
+         x="62.672787"
+         y="49.627338"
+         id="tspan36694">outer: 120x120 mm</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:3.52778px;stroke-width:0.264583"
+         x="62.672787"
+         y="54.03706"
+         id="tspan37569">fan diam: 115 mm</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:3.52778px;stroke-width:0.264583"
+         x="62.672787"
+         y="58.446785"
+         id="tspan37571">inner fan diam: 45mm</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:3.52778px;stroke-width:0.264583"
+         x="62.672787"
+         y="62.85651"
+         id="tspan38101">screw-screw dist: 105 mm</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:10.5833px;line-height:1.25;font-family:sans-serif;fill:#767676;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       x="82.832939"
+       y="137.72768"
+       id="text21883"><tspan
+         sodipodi:role="line"
+         id="tspan21881"
+         style="fill:#767676;fill-opacity:1;stroke-width:0.264583"
+         x="82.832939"
+         y="137.72768">FAN</tspan></text>
+    <circle
+       style="fill:none;stroke:#ff0000;stroke-width:0.32727"
+       id="path42440"
+       cx="93.293495"
+       cy="88.831726"
+       r="58.336365" />
+    <g
+       id="g43442"
+       transform="translate(-5.0163331,105.61412)">
+      <ellipse
+         style="fill:none;stroke:#ff0000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none"
+         id="path43094"
+         cx="46.227459"
+         cy="35.20335"
+         rx="1.8819767"
+         ry="1.8819768" />
+      <path
+         id="path43209"
+         style="fill:#ff0000;fill-opacity:1;stroke:#ff0000;stroke-width:0.2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m 47.651911,33.778365 -1.411203,1.411202 -1.340316,-1.340316 -0.02667,0.02667 1.35347,1.327162 -1.326795,1.326796 0.02704,0.02704 1.313639,-1.339952 1.41084,1.383798 -1.397319,-1.397319 z" />
+    </g>
+    <g
+       id="g43442-9"
+       transform="translate(99.385204,105.62764)">
+      <ellipse
+         style="fill:none;stroke:#ff0000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none"
+         id="path43094-5"
+         cx="46.227459"
+         cy="35.20335"
+         rx="1.8819767"
+         ry="1.8819768" />
+      <path
+         id="path43209-0"
+         style="fill:#ff0000;fill-opacity:1;stroke:#ff0000;stroke-width:0.2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m 47.651911,33.778365 -1.411203,1.411202 -1.340316,-1.340316 -0.02667,0.02667 1.35347,1.327162 -1.326795,1.326796 0.02704,0.02704 1.313639,-1.339952 1.41084,1.383798 -1.397319,-1.397319 z" />
+    </g>
+    <g
+       id="g43442-4"
+       transform="translate(99.385204,1.2125773)">
+      <ellipse
+         style="fill:none;stroke:#ff0000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none"
+         id="path43094-8"
+         cx="46.227459"
+         cy="35.20335"
+         rx="1.8819767"
+         ry="1.8819768" />
+      <path
+         id="path43209-7"
+         style="fill:#ff0000;fill-opacity:1;stroke:#ff0000;stroke-width:0.2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m 47.651911,33.778365 -1.411203,1.411202 -1.340316,-1.340316 -0.02667,0.02667 1.35347,1.327162 -1.326795,1.326796 0.02704,0.02704 1.313639,-1.339952 1.41084,1.383798 -1.397319,-1.397319 z" />
+    </g>
+    <g
+       id="g43442-6"
+       transform="translate(-5.0024497,1.2129397)">
+      <ellipse
+         style="fill:none;stroke:#ff0000;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none"
+         id="path43094-6"
+         cx="46.227459"
+         cy="35.20335"
+         rx="1.8819767"
+         ry="1.8819768" />
+      <path
+         id="path43209-4"
+         style="fill:#ff0000;fill-opacity:1;stroke:#ff0000;stroke-width:0.2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m 47.651911,33.778365 -1.411203,1.411202 -1.340316,-1.340316 -0.02667,0.02667 1.35347,1.327162 -1.326795,1.326796 0.02704,0.02704 1.313639,-1.339952 1.41084,1.383798 -1.397319,-1.397319 z" />
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:2.82222px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="136.24461"
+       y="35.677166"
+       id="text45221"><tspan
+         sodipodi:role="line"
+         id="tspan45219"
+         style="font-size:2.82222px;stroke-width:0.264583"
+         x="136.24461"
+         y="35.677166">4mm</tspan></text>
+  </g>
+</svg>

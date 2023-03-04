@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg34699"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="volume_knob.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview34701"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="3.8128507"
+     inkscape:cx="202.73545"
+     inkscape:cy="153.0351"
+     inkscape:window-width="1366"
+     inkscape:window-height="719"
+     inkscape:window-x="0"
+     inkscape:window-y="25"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:snap-object-midpoints="true" />
+  <defs
+     id="defs34696" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g40151">
+      <circle
+         style="fill:none;stroke:#000000;stroke-width:0.112964;stroke-opacity:1"
+         id="path34802"
+         cx="52.030853"
+         cy="40.536968"
+         r="15.943518" />
+      <circle
+         style="fill:none;stroke:#ff0000;stroke-width:0.124976;stroke-opacity:1"
+         id="path34942"
+         cx="52.030853"
+         cy="40.536968"
+         r="3.4375122" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:2.82222px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="55.496517"
+         y="41.667061"
+         id="text35630"><tspan
+           sodipodi:role="line"
+           id="tspan35628"
+           style="font-size:2.82222px;stroke-width:0.264583"
+           x="55.496517"
+           y="41.667061">7mm</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:1.41111px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+         x="44.083138"
+         y="33.300991"
+         id="text35630-8"><tspan
+           sodipodi:role="line"
+           id="tspan35628-9"
+           style="font-size:1.41111px;stroke-width:0.264583"
+           x="44.083138"
+           y="33.300991">15mm</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:1.41111px;stroke-width:0.264583"
+           x="44.083138"
+           y="35.06488"
+           id="tspan38229">countersink from front</tspan></text>
+      <path
+         id="path37293"
+         style="fill:none;stroke:#ff0000;stroke-width:0.20954px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         d="m 54.505749,38.062071 -2.474542,2.452614 -2.379533,-2.400727 -0.02192,0.02192 2.39013,2.390131 -2.411689,2.389766 0.02193,0.02192 2.400728,-2.400727 2.474539,2.47454 -2.463576,-2.485503 z" />
+      <circle
+         style="fill:none;stroke:#ff0000;stroke-width:0.172448;stroke-opacity:1"
+         id="path37492"
+         cx="52.019882"
+         cy="40.526009"
+         r="7.4137759" />
+    </g>
+  </g>
+</svg>
