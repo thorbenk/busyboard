@@ -5,6 +5,9 @@
 #include <bitset>
 #include <iostream>
 
+#include <PicoLed.hpp>
+
+#include "color.h"
 #include "debounce.h"
 
 // hardware ------------------------------------------------------------------
@@ -29,7 +32,7 @@
 // GP 14
 // GP 15
 //
-// GP 16
+// GP 16 - data in WS2812b arcade buttons string
 // GP 17
 // GP 18
 // GP 19
@@ -51,6 +54,12 @@
 #define IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN 28
 #define IO_EXPAND_16_DEVICE_1_I2C_ADDRESS 0x20
 #define IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC 10
+#define ARCADE_BUTTONS_8_DIN_PIN 16
+#define ARCADE_BUTTONS_8_LED_LENGTH 8
+constexpr auto arcade_buttons_8_led_format = PicoLed::FORMAT_GRB;
+
+#define FPS 60
+#define MS_PER_FRAME 16
 
 //----------------------------------------------------------------------------
 // globals
@@ -62,6 +71,17 @@ Debounce_PCF8575 io16_dev1(IO_EXPAND_16_DEVICE_1_I2C_LANE,
 
 volatile bool io16_device1_changed = true;
 uint16_t io16_device1_prev_state = 0;
+
+struct State {
+  uint8_t buttons_8 = 0;
+  uint32_t tick = 0;
+  PicoLed::Color button_color[ARCADE_BUTTONS_8_LED_LENGTH];
+};
+
+float led_hues[ARCADE_BUTTONS_8_LED_LENGTH];
+
+State state;
+volatile bool frame_changed = true;
 
 //----------------------------------------------------------------------------
 
@@ -77,6 +97,36 @@ auto read_pcf8575(i2c_inst_t *i2c, uint8_t addr) -> uint16_t {
 
 void io_expand16_device1_callback(uint gpio, uint32_t events) {
   io16_dev1.on_pcf8575_interrupt();
+}
+
+auto calc_frame() -> void {
+  auto constexpr duration_sec = 2;
+  auto constexpr duration_frames = duration_sec * FPS;
+  auto constexpr duration_frames_2 = duration_sec * FPS / 2;
+  auto constexpr N = ARCADE_BUTTONS_8_LED_LENGTH;
+
+  auto f = state.tick % duration_frames;
+  if (f > duration_frames_2)
+    f = duration_frames - f;
+  uint8_t v = 32 + 128 * (f / static_cast<float>(duration_frames_2));
+
+  for (int i = 0; i < 8; ++i) {
+    if ((1 << i) & state.buttons_8) {
+      // button pressed: green
+      auto const [r, g, b] = hsv_to_rgb(120.0, 1.0, v);
+      state.button_color[i] = PicoLed::RGB(r, g, b);
+    } else {
+      // button not pressed: red
+      auto const [r, g, b] = hsv_to_rgb(0.0, 1.0, v);
+      state.button_color[i] = PicoLed::RGB(r, g, b);
+    }
+  }
+}
+
+int64_t on_frame(alarm_id_t id, void *user_data) {
+  ++state.tick;
+  frame_changed = true;
+  return MS_PER_FRAME * 1000; // microseconds
 }
 
 //----------------------------------------------------------------------------
@@ -97,52 +147,55 @@ int main() {
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
                                      true, &io_expand16_device1_callback);
 
+  for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
+    led_hues[i] = i / static_cast<float>(ARCADE_BUTTONS_8_LED_LENGTH) * 360.f;
+  }
+
+  add_alarm_in_ms(MS_PER_FRAME, on_frame, nullptr, false);
+
+  sleep_ms(100);
+
+  auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
+      pio0, 0, ARCADE_BUTTONS_8_DIN_PIN, ARCADE_BUTTONS_8_LED_LENGTH,
+      arcade_buttons_8_led_format);
+
+  ledStrip.setBrightness(255);
+  ledStrip.clear();
+  ledStrip.fill(PicoLed::RGB(0, 255, 255));
+  ledStrip.show();
+
   sleep_ms(100);
 
   io16_dev1.init();
   io16_device1_prev_state = io16_dev1.state();
 
-#if 0
-  std::cout << "IO expander initialisation" << std::endl;
-  for (int i = 0; i < 3; ++i) {
-    uint8_t rxdata[2] = {0xff, 0xff};
-    auto ret = i2c_write_blocking(i2c1, IO_EXPAND_16_DEVICE_1_I2C_ADDRESS,
-                                  rxdata, 2, false);
-    std::cout << "  try " << i << " : RET = " << ret << std::endl;
-    // if (ret == PICO_ERROR_GENERIC) {
-    //   std::cout << "generic = " << ret << std::endl;
-    // }
-    sleep_ms(100);
-    auto pins = read_pcf8575(i2c1, IO_EXPAND_16_DEVICE_1_I2C_ADDRESS);
-    std::cout << "  IO expander says: " << std::bitset<16>(pins) << std::endl;
-    sleep_ms(100);
-  }
-  std::cout << "IO expander init done." << std::endl;
-#endif
-
   while (true) {
     if (io16_dev1.loop()) {
-      auto const state = io16_dev1.state();
+      auto const current_state = io16_dev1.state();
       for (auto i = 0; i < 16; ++i) {
         bool prev = ((1 << i) & io16_device1_prev_state) > 0;
-        bool now = ((1 << i) & state) > 0;
-        if (prev != now) {
+        bool current = ((1 << i) & current_state) > 0;
+        if (prev != current) {
           std::cout << "button " << i << " : " << (int)prev << " -> "
-                    << (int)now << std::endl;
+                    << (int)current << std::endl;
+        }
+        if (i < 8 && prev == 1 && current == 0) {
+          // this means the button was pressed down.
+          state.buttons_8 ^= (1 << i);
+          std::cout << "button 8 = " << (int)state.buttons_8 << std::endl;
         }
       }
       io16_device1_prev_state = io16_dev1.state();
     }
 
-#if 0
-    if (state_changed) {
-      state_changed = false;
-      for (int i = 0; i < LED_LENGTH; ++i) {
+    if (frame_changed) {
+      calc_frame();
+      frame_changed = false;
+      for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
         ledStrip.setPixelColor(i, state.button_color[i]);
       }
       ledStrip.show();
     }
-#endif
   }
 
   return 0;

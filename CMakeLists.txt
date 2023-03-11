@@ -13,8 +13,12 @@ include("3rdparty/TM1637-pico/PicoTM1637.cmake")
 add_executable(busyboard 
   busyboard.cpp 
   debounce.cpp
+  color.cpp
 )
-target_link_libraries(busyboard pico_stdlib hardware_i2c)
-pico_add_extra_outputs(busyboard)
+target_link_libraries(busyboard 
+  pico_stdlib  
+  hardware_i2c
+  PicoLed
+)
 
 add_subdirectory(parts)

@@ -70,7 +70,7 @@ struct State {
 float led_hues[LED_LENGTH];
 
 State state;
-volatile bool state_changed = true;
+volatile bool frame_changed = true;
 volatile bool pcf8575_changed = true;
 
 auto read_pcf8575(i2c_inst_t *i2c, uint8_t addr) -> uint16_t {
@@ -125,7 +125,7 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
   }
 
   ++state.tick;
-  state_changed = true;
+  frame_changed = true;
   return MS_PER_FRAME * 1000; // microseconds
 }
 
