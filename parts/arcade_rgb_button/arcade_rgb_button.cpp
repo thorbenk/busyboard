@@ -64,7 +64,7 @@ void sample_callback(uint gpio, uint32_t events) {
 struct State {
   bool button = false;
   uint32_t tick = 0;
-  PicoLed::Color button_color[LED_LENGTH];
+  PicoLed::Color grb_led_string[LED_LENGTH];
 };
 
 float led_hues[LED_LENGTH];
@@ -114,13 +114,13 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
     for (int i = 0; i < LED_LENGTH; ++i) {
       float h = led_hues[i];
       auto const [r, g, b] = hsv_to_rgb(h, 1.0, v);
-      state.button_color[i] = PicoLed::RGB(r, g, b);
+      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   } else {
     for (int i = 0; i < LED_LENGTH; ++i) {
       float h = led_hues[i];
       auto const [r, g, b] = hsv_to_rgb(h, 1.0, 1.0);
-      state.button_color[i] = PicoLed::RGB(r, g, b);
+      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   }
 

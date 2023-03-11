@@ -32,7 +32,7 @@
 // GP 14
 // GP 15
 //
-// GP 16 - data in WS2812b arcade buttons string
+// GP 16 - data in for WS2812b: string of 8 arcade buttons and 6 LEDs in fan
 // GP 17
 // GP 18
 // GP 19
@@ -56,7 +56,12 @@
 #define IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC 10
 #define ARCADE_BUTTONS_8_DIN_PIN 16
 #define ARCADE_BUTTONS_8_LED_LENGTH 8
+#define FAN_LED_LENGTH 6
 constexpr auto arcade_buttons_8_led_format = PicoLed::FORMAT_GRB;
+constexpr auto fan_led_format = PicoLed::FORMAT_GRB;
+static_assert(arcade_buttons_8_led_format == fan_led_format);
+constexpr auto grb_led_string_length =
+    ARCADE_BUTTONS_8_LED_LENGTH + FAN_LED_LENGTH;
 
 #define FPS 60
 #define MS_PER_FRAME 16
@@ -75,10 +80,8 @@ uint16_t io16_device1_prev_state = 0;
 struct State {
   uint8_t buttons_8 = 0;
   uint32_t tick = 0;
-  PicoLed::Color button_color[ARCADE_BUTTONS_8_LED_LENGTH];
+  PicoLed::Color grb_led_string[grb_led_string_length];
 };
-
-float led_hues[ARCADE_BUTTONS_8_LED_LENGTH];
 
 State state;
 volatile bool frame_changed = true;
@@ -110,16 +113,21 @@ auto calc_frame() -> void {
     f = duration_frames - f;
   uint8_t v = 32 + 128 * (f / static_cast<float>(duration_frames_2));
 
-  for (int i = 0; i < 8; ++i) {
+  for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
     if ((1 << i) & state.buttons_8) {
       // button pressed: green
       auto const [r, g, b] = hsv_to_rgb(120.0, 1.0, v);
-      state.button_color[i] = PicoLed::RGB(r, g, b);
+      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     } else {
       // button not pressed: red
       auto const [r, g, b] = hsv_to_rgb(0.0, 1.0, v);
-      state.button_color[i] = PicoLed::RGB(r, g, b);
+      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
+  }
+
+  for (int i = ARCADE_BUTTONS_8_LED_LENGTH; i < grb_led_string_length; ++i) {
+    auto const [r, g, b] = hsv_to_rgb(220.0, 1.0, v);
+    state.grb_led_string[i] = PicoLed::RGB(r, g, b);
   }
 }
 
@@ -147,16 +155,10 @@ int main() {
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
                                      true, &io_expand16_device1_callback);
 
-  for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
-    led_hues[i] = i / static_cast<float>(ARCADE_BUTTONS_8_LED_LENGTH) * 360.f;
-  }
-
   add_alarm_in_ms(MS_PER_FRAME, on_frame, nullptr, false);
 
-  sleep_ms(100);
-
   auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
-      pio0, 0, ARCADE_BUTTONS_8_DIN_PIN, ARCADE_BUTTONS_8_LED_LENGTH,
+      pio0, 0, ARCADE_BUTTONS_8_DIN_PIN, grb_led_string_length,
       arcade_buttons_8_led_format);
 
   ledStrip.setBrightness(255);
@@ -191,8 +193,8 @@ int main() {
     if (frame_changed) {
       calc_frame();
       frame_changed = false;
-      for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
-        ledStrip.setPixelColor(i, state.button_color[i]);
+      for (int i = 0; i < grb_led_string_length; ++i) {
+        ledStrip.setPixelColor(i, state.grb_led_string[i]);
       }
       ledStrip.show();
     }
