@@ -26,6 +26,9 @@ public:
 class Debounce_PCF8575 {
 public:
   Debounce_PCF8575(i2c_inst_t *i2c, uint8_t addr, uint32_t debounce_ms);
+
+  auto init() -> void;
+
   void on_pcf8575_interrupt() { needs_update_ = true; }
 
   auto loop() -> bool;

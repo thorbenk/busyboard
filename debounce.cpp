@@ -25,9 +25,11 @@ int64_t debounce_alarm(alarm_id_t id, void *user_data) {
 Debounce_PCF8575::Debounce_PCF8575(i2c_inst_t *i2c, uint8_t addr,
                                    uint32_t debounce_ms)
     : i2c_(i2c), i2c_address_(addr), debounce_ms_(debounce_ms) {
-
   std::fill(std::begin(debounce_timers_), std::end(debounce_timers_), 0);
-  debounced_state_ = read_pcf8575(i2c1, 0x20);
+}
+
+auto Debounce_PCF8575::init() -> void {
+  debounced_state_ = read_pcf8575(i2c_, i2c_address_);
 }
 
 auto Debounce_PCF8575::loop() -> bool {
