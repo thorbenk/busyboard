@@ -16,3 +16,9 @@
 [submodule "3rdparty/plakativ"]
 	path = 3rdparty/plakativ
 	url = https://gitlab.mister-muffin.de/josch/plakativ
+[submodule "3rdparty/Pico7219"]
+	path = 3rdparty/Pico7219
+	url = https://github.com/kevinboone/Pico7219
+[submodule "3rdparty/raster-fonts"]
+	path = 3rdparty/raster-fonts
+	url = https://github.com/idispatch/raster-fonts

@@ -14,10 +14,16 @@ add_executable(busyboard
   busyboard.cpp 
   debounce.cpp
   color.cpp
+  3rdparty/Pico7219/pico7219/src/pico7219.c
+  3rdparty/Pico7219/test/font8.c
+)
+target_include_directories(busyboard PRIVATE
+  3rdparty/Pico7219/pico7219/include 
 )
 target_link_libraries(busyboard 
   pico_stdlib  
   hardware_i2c
+  hardware_spi
   PicoLed
 )
 

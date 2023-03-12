@@ -3,9 +3,12 @@
 #include <pico/stdlib.h>
 
 #include <bitset>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 
 #include <PicoLed.hpp>
+#include <pico7219/pico7219.h>
 
 #include "color.h"
 #include "debounce.h"
@@ -25,10 +28,10 @@
 // GP  6
 // GP  8
 // GP  9
-// GP 10
-// GP 11
-// GP 12
-// GP 13
+// GP 10 - SPI1 SCK -> Dot matrix CLOCK
+// GP 11 - SPI1 TX  -> Dot matrix DIN
+// GP 12 - <reserved for SPI1 RX?>
+// GP 13 - SPI1 CSn -> Dot matrix CS
 // GP 14
 // GP 15
 //
@@ -62,6 +65,12 @@ constexpr auto fan_led_format = PicoLed::FORMAT_GRB;
 static_assert(arcade_buttons_8_led_format == fan_led_format);
 constexpr auto grb_led_string_length =
     ARCADE_BUTTONS_8_LED_LENGTH + FAN_LED_LENGTH;
+#define DOT_MATRIX_SPI_CHAN PicoSpiNum::PICO_SPI_1
+#define DOT_MATRIX_SPI_SCK 10
+#define DOT_MATRIX_SPI_TX 11
+#define DOT_MATRIX_SPI_CS 13
+#define DOT_MATRIX_SPI_BAUDRATE 1500 * 1000
+#define DOT_MATRIX_CHAIN_LEN 4
 
 #define FPS 60
 #define MS_PER_FRAME 16
@@ -159,6 +168,85 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
   return MS_PER_FRAME * 1000; // microseconds
 }
 
+//---------------------------------------------------------------------------
+
+extern uint8_t font8_table[];
+extern uint8_t font8_first;
+extern uint8_t font8_last;
+
+// Draw a character to the library. Note that the width of the "virtual
+// display" can be much longer than the physical module chain, and
+// off-display elements can later be scrolled into view. However, it's
+// the job of the application, not the library, to size the virtual
+// display sufficiently to fit all the text in.
+//
+// chr is an offset in the font table, which starts with character 32 (space).
+// It isn't an ASCII character.
+void draw_character(Pico7219 *pico7219, uint8_t chr, int x_offset, BOOL flush) {
+  for (int i = 0; i < 8; i++) // row
+  {
+    // The font elements are one byte wide even though, as its an 8x5 font,
+    //   only the top five bits of each byte are used.
+    uint8_t v = font8_table[8 * chr + i];
+    for (int j = 0; j < 8; j++) // column
+    {
+      int sel = 1 << j;
+      if (sel & v)
+        pico7219_switch_on(pico7219, 7 - i, 7 - j + x_offset, FALSE);
+    }
+  }
+  if (flush)
+    pico7219_flush(pico7219);
+}
+
+// Draw a string of text on the (virtual) display. This function assumes
+// that the library has already been configured to provide a virtual
+// chain of LED modules that is long enough to fit all the text onto.
+void draw_string(Pico7219 *pico7219, const char *s, BOOL flush) {
+  int x = 0;
+  while (*s) {
+    draw_character(pico7219, *s - ' ', x, FALSE);
+    s++;
+    x += 6;
+  }
+  if (flush)
+    pico7219_flush(pico7219);
+}
+
+// Get the number of horizontal pixels that a string will take. Since each
+// font element is five pixels wide, and there is one pixel between each
+// character, we just multiply the string length by 6.
+int get_string_length_pixels(const char *s) { return std::strlen(s) * 6; }
+
+// Get the number of 8x8 LED modules that would be needed to accomodate the
+// string of text. That's the number of pixels divided by 8 (the module
+// width), and then one added to round up.
+int get_string_length_modules(const char *s) {
+  return get_string_length_pixels(s) / 8 + 1;
+}
+
+// Show a string of characters, and then scroll it across the display.
+// This function uses pico7219_set_virtual_chain_length() to ensure that
+// there are enough "virtual" modules in the display chain to fit
+// the whole string. It then scrolls it enough times to scroll the
+// whole string right off the end.
+void show_text_and_scroll(Pico7219 *pico7219, const char *string) {
+  pico7219_set_virtual_chain_length(pico7219,
+                                    get_string_length_modules(string));
+  draw_string(pico7219, string, FALSE);
+  pico7219_flush(pico7219);
+
+  int l = get_string_length_pixels(string);
+
+  for (int i = 0; i < l; i++) {
+    sleep_ms(50);
+    pico7219_scroll(pico7219, FALSE);
+  }
+
+  pico7219_switch_off_all(pico7219, TRUE);
+  sleep_ms(500);
+}
+
 //----------------------------------------------------------------------------
 
 int main() {
@@ -183,10 +271,19 @@ int main() {
       pio0, 0, ARCADE_BUTTONS_8_DIN_PIN, grb_led_string_length,
       arcade_buttons_8_led_format);
 
+  Pico7219 *dot_matrix = pico7219_create(
+      DOT_MATRIX_SPI_CHAN, DOT_MATRIX_SPI_BAUDRATE, DOT_MATRIX_SPI_TX,
+      DOT_MATRIX_SPI_SCK, DOT_MATRIX_SPI_CS, DOT_MATRIX_CHAIN_LEN, false);
+
+  pico7219_switch_off_all(dot_matrix, false);
+
   ledStrip.setBrightness(255);
   ledStrip.clear();
   ledStrip.fill(PicoLed::RGB(0, 0, 64));
   ledStrip.show();
+
+  draw_string(dot_matrix, "LUAN", false);
+  pico7219_flush(dot_matrix);
 
   sleep_ms(100);
 
@@ -209,6 +306,13 @@ int main() {
           // this means the button was pressed down.
           state.buttons_8 ^= (1 << i);
           std::cout << "button 8 = " << (int)state.buttons_8 << std::endl;
+
+          char b[4] = {0, 0, 0, 0};
+          itoa(state.buttons_8, b, 10);
+
+          pico7219_switch_off_all(dot_matrix, false);
+          draw_string(dot_matrix, b, false);
+          pico7219_flush(dot_matrix);
         }
         if (i == 8 && prev == 1 && current == 0) {
           std::cout << "fader push A" << std::endl;
