@@ -71,4 +71,5 @@ private:
   // A zero means: No timer running.
   // A positive value gives the start time of the timer in usec since boot.
   uint64_t debounce_timers_[16];
+  bool init_ = true;
 };

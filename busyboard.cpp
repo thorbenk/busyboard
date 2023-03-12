@@ -77,13 +77,14 @@ Debounce_PCF8575 io16_dev1(IO_EXPAND_16_DEVICE_1_I2C_LANE,
                            IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC);
 
 volatile bool io16_device1_changed = true;
-uint16_t io16_device1_prev_state = 0;
+std::optional<uint16_t> io16_device1_prev_state;
 
 struct State {
   uint8_t buttons_8 = 0;
   uint32_t tick = 0;
   PicoLed::Color grb_led_string[grb_led_string_length];
   FaderMode fader_mode = FaderMode::A;
+  bool toggle_upper_left = false;
 };
 
 State state;
@@ -131,13 +132,17 @@ auto calc_frame() -> void {
   }
 
   for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
+    float v_arcade = v;
+    if (!state.toggle_upper_left)
+      v_arcade = 0.f;
+
     if ((1 << i) & state.buttons_8) {
       // button pressed
-      auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v);
+      auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v_arcade);
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     } else {
       // button not pressed
-      auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v);
+      auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v_arcade);
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   }
@@ -180,20 +185,22 @@ int main() {
 
   ledStrip.setBrightness(255);
   ledStrip.clear();
-  ledStrip.fill(PicoLed::RGB(0, 255, 255));
+  ledStrip.fill(PicoLed::RGB(0, 0, 64));
   ledStrip.show();
 
   sleep_ms(100);
 
   io16_dev1.init();
-  io16_device1_prev_state = io16_dev1.state();
 
   while (true) {
     if (io16_dev1.loop()) {
+      std::cout << "io16 changed" << std::endl;
       auto const current_state = io16_dev1.state();
       for (auto i = 0; i < 16; ++i) {
-        bool prev = ((1 << i) & io16_device1_prev_state) > 0;
-        bool current = ((1 << i) & current_state) > 0;
+        bool const current = ((1 << i) & current_state) > 0;
+        bool const prev = io16_device1_prev_state.has_value()
+                              ? (((1 << i) & *io16_device1_prev_state) > 0)
+                              : (!current);
         if (prev != current) {
           std::cout << "button " << i << " : " << (int)prev << " -> "
                     << (int)current << std::endl;
@@ -212,6 +219,8 @@ int main() {
         } else if (i == 10 && prev == 1 && current == 0) {
           std::cout << "fader push C" << std::endl;
           state.fader_mode = FaderMode::C;
+        } else if (i == 11) {
+          state.toggle_upper_left = (current == 1);
         }
       }
       io16_device1_prev_state = io16_dev1.state();

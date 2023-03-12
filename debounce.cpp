@@ -1,6 +1,7 @@
 #include "debounce.h"
 #include "hardware/i2c.h"
 
+#include <bitset>
 #include <iostream>
 
 namespace {
@@ -44,6 +45,7 @@ auto Debounce_PCF8575::loop() -> bool {
   // Either a previous interrupt indicated that the values of the pins
   // have changed or we have at least one debounce timer that has timed out.
   uint16_t new_state = read_pcf8575(i2c_, i2c_address_);
+  // std::cout << "io16: " << std::bitset<16>(new_state) << std::endl;
   needs_update_ = false;
 
   bool state_changed = false;
@@ -68,5 +70,9 @@ auto Debounce_PCF8575::loop() -> bool {
     }
   }
 
+  if (init_) {
+    init_ = false;
+    return true;
+  }
   return state_changed;
 }
