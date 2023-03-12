@@ -66,6 +66,8 @@ constexpr auto grb_led_string_length =
 #define FPS 60
 #define MS_PER_FRAME 16
 
+enum class FaderMode { A, B, C };
+
 //----------------------------------------------------------------------------
 // globals
 //----------------------------------------------------------------------------
@@ -81,6 +83,7 @@ struct State {
   uint8_t buttons_8 = 0;
   uint32_t tick = 0;
   PicoLed::Color grb_led_string[grb_led_string_length];
+  FaderMode fader_mode = FaderMode::A;
 };
 
 State state;
@@ -113,14 +116,28 @@ auto calc_frame() -> void {
     f = duration_frames - f;
   uint8_t v = 32 + 128 * (f / static_cast<float>(duration_frames_2));
 
+  float hue_on = 120.0;
+  float hue_off = 0.0;
+
+  if (state.fader_mode == FaderMode::A) {
+    hue_on = 120.0;
+    hue_off = 0.0;
+  } else if (state.fader_mode == FaderMode::B) {
+    hue_on = 60.0;
+    hue_off = 180.0;
+  } else if (state.fader_mode == FaderMode::C) {
+    hue_on = 200.0;
+    hue_off = 300.0;
+  }
+
   for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
     if ((1 << i) & state.buttons_8) {
-      // button pressed: green
-      auto const [r, g, b] = hsv_to_rgb(120.0, 1.0, v);
+      // button pressed
+      auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v);
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     } else {
-      // button not pressed: red
-      auto const [r, g, b] = hsv_to_rgb(0.0, 1.0, v);
+      // button not pressed
+      auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v);
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   }
@@ -185,6 +202,16 @@ int main() {
           // this means the button was pressed down.
           state.buttons_8 ^= (1 << i);
           std::cout << "button 8 = " << (int)state.buttons_8 << std::endl;
+        }
+        if (i == 8 && prev == 1 && current == 0) {
+          std::cout << "fader push A" << std::endl;
+          state.fader_mode = FaderMode::A;
+        } else if (i == 9 && prev == 1 && current == 0) {
+          std::cout << "fader push B" << std::endl;
+          state.fader_mode = FaderMode::B;
+        } else if (i == 10 && prev == 1 && current == 0) {
+          std::cout << "fader push C" << std::endl;
+          state.fader_mode = FaderMode::C;
         }
       }
       io16_device1_prev_state = io16_dev1.state();
