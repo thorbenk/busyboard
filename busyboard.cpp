@@ -56,7 +56,7 @@
 #define IO_EXPAND_16_DEVICE_1_I2C_LANE i2c1
 #define IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN 28
 #define IO_EXPAND_16_DEVICE_1_I2C_ADDRESS 0x20
-#define IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC 10
+#define IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC 2
 #define ARCADE_BUTTONS_8_DIN_PIN 16
 #define ARCADE_BUTTONS_8_LED_LENGTH 8
 #define FAN_LED_LENGTH 6
@@ -281,11 +281,17 @@ int main() {
   ledStrip.show();
 
   draw_string(dot_matrix, "LUAN", false);
+  pico7219_set_intensity(dot_matrix, 0);
   pico7219_flush(dot_matrix);
+
+  uint32_t frame_usec_min = 0;
+  uint32_t frame_usec_max = 0;
 
   sleep_ms(100);
 
   io16_dev1.init();
+
+  bool arcade8_num_changed = false;
 
   while (true) {
     if (io16_dev1.loop()) {
@@ -301,23 +307,10 @@ int main() {
                     << (int)current << std::endl;
         }
         if (i < 8 && prev == 1 && current == 0) {
+          arcade8_num_changed = true;
           // this means the button was pressed down.
           state.buttons_8 ^= (1 << i);
           std::cout << "button 8 = " << (int)state.buttons_8 << std::endl;
-
-          char b[4] = {0, 0, 0, 0};
-          char b2[4] = {' ', ' ', ' ', 0};
-          itoa(state.buttons_8, b, 10);
-          if (state.buttons_8 >= 100)
-            std::copy(b, b + 3, b2 + 1);
-          else if (state.buttons_8 >= 10)
-            std::copy(b, b + 2, b2 + 2);
-          else
-            std::copy(b, b + 2, b2 + 3);
-
-          pico7219_switch_off_all(dot_matrix, false);
-          draw_string(dot_matrix, b2, false);
-          pico7219_flush(dot_matrix);
         }
         if (i == 8 && prev == 1 && current == 0) {
           std::cout << "fader push A" << std::endl;
@@ -336,12 +329,41 @@ int main() {
     }
 
     if (frame_changed) {
+      auto start = time_us_32();
       calc_frame();
       frame_changed = false;
       for (int i = 0; i < grb_led_string_length; ++i) {
         ledStrip.setPixelColor(i, state.grb_led_string[i]);
       }
       ledStrip.show();
+      if (arcade8_num_changed) {
+        std::cout << "update dot matrix" << std::endl;
+        char b[4] = {0, 0, 0, 0};
+        char b2[4] = {' ', ' ', ' ', 0};
+        itoa(state.buttons_8, b, 10);
+        if (state.buttons_8 >= 100)
+          std::copy(b, b + 3, b2 + 1);
+        else if (state.buttons_8 >= 10)
+          std::copy(b, b + 2, b2 + 2);
+        else
+          std::copy(b, b + 2, b2 + 3);
+
+        pico7219_switch_off_all(dot_matrix, false);
+        draw_string(dot_matrix, b2, false);
+        pico7219_flush(dot_matrix);
+
+        arcade8_num_changed = false;
+      }
+      auto end = time_us_32();
+
+      // debug frames per second
+      auto dur = end - start;
+      frame_usec_max = std::max(frame_usec_max, dur);
+      frame_usec_min = std::min(frame_usec_min, dur);
+      if (state.tick % FPS == 0) {
+        std::cout << "frame time min=" << frame_usec_min
+                  << ", max=" << frame_usec_max << " usec" << std::endl;
+      }
     }
   }
 
