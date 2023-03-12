@@ -170,9 +170,7 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
 
 //---------------------------------------------------------------------------
 
-extern uint8_t font8_table[];
-extern uint8_t font8_first;
-extern uint8_t font8_last;
+extern uint8_t console_font_8x8[];
 
 // Draw a character to the library. Note that the width of the "virtual
 // display" can be much longer than the physical module chain, and
@@ -187,7 +185,7 @@ void draw_character(Pico7219 *pico7219, uint8_t chr, int x_offset, BOOL flush) {
   {
     // The font elements are one byte wide even though, as its an 8x5 font,
     //   only the top five bits of each byte are used.
-    uint8_t v = font8_table[8 * chr + i];
+    uint8_t v = console_font_8x8[8 * chr + i];
     for (int j = 0; j < 8; j++) // column
     {
       int sel = 1 << j;
@@ -205,9 +203,9 @@ void draw_character(Pico7219 *pico7219, uint8_t chr, int x_offset, BOOL flush) {
 void draw_string(Pico7219 *pico7219, const char *s, BOOL flush) {
   int x = 0;
   while (*s) {
-    draw_character(pico7219, *s - ' ', x, FALSE);
+    draw_character(pico7219, *s, x, FALSE);
     s++;
-    x += 6;
+    x += 8;
   }
   if (flush)
     pico7219_flush(pico7219);
@@ -308,10 +306,17 @@ int main() {
           std::cout << "button 8 = " << (int)state.buttons_8 << std::endl;
 
           char b[4] = {0, 0, 0, 0};
+          char b2[4] = {' ', ' ', ' ', 0};
           itoa(state.buttons_8, b, 10);
+          if (state.buttons_8 >= 100)
+            std::copy(b, b + 3, b2 + 1);
+          else if (state.buttons_8 >= 10)
+            std::copy(b, b + 2, b2 + 2);
+          else
+            std::copy(b, b + 2, b2 + 3);
 
           pico7219_switch_off_all(dot_matrix, false);
-          draw_string(dot_matrix, b, false);
+          draw_string(dot_matrix, b2, false);
           pico7219_flush(dot_matrix);
         }
         if (i == 8 && prev == 1 && current == 0) {
