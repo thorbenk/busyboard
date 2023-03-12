@@ -18,7 +18,8 @@ add_executable(busyboard
   3rdparty/raster-fonts/font-8x8.c
 )
 target_include_directories(busyboard PRIVATE
-  3rdparty/Pico7219/pico7219/include 
+  ${PROJECT_SOURCE_DIR}/3rdparty/Pico7219/pico7219/include 
+  ${PROJECT_SOURCE_DIR}/3rdparty/pico-dfPlayer
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(busyboard 

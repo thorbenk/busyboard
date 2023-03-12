@@ -12,10 +12,12 @@
 
 #include "color.h"
 #include "debounce.h"
+#include "dfPlayerDriver.h"
 
 // hardware ------------------------------------------------------------------
 // - Raspberry Pi Pico
 // - IO expander PCF8575
+// - DF Player Mini
 
 // pins ----------------------------------------------------------------------
 //
@@ -26,8 +28,8 @@
 // GP  4
 // GP  5
 // GP  6
-// GP  8
-// GP  9
+// GP  8 - UART1 TX -> DF Player Mini
+// GP  9 - UART1 TX -> DF Player Mini
 // GP 10 - SPI1 SCK -> Dot matrix CLOCK
 // GP 11 - SPI1 TX  -> Dot matrix DIN
 // GP 12 - <reserved for SPI1 RX?>
@@ -71,6 +73,10 @@ constexpr auto grb_led_string_length =
 #define DOT_MATRIX_SPI_CS 13
 #define DOT_MATRIX_SPI_BAUDRATE 1500 * 1000
 #define DOT_MATRIX_CHAIN_LEN 4
+
+#define DFPLAYER_UART 1
+#define DFPLAYER_MINI_RX 8 /* GP 8 - TX (UART 1) */
+#define DFPLAYER_MINI_TX 9 /* GP 9 - RX (UART 1) */
 
 #define FPS 60
 #define MS_PER_FRAME 16
@@ -287,7 +293,19 @@ int main() {
   uint32_t frame_usec_min = 0;
   uint32_t frame_usec_max = 0;
 
-  sleep_ms(100);
+  DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> dfp;
+  dfp.reset();
+  sleep_ms(2000);
+  dfp.specifyVolume(10);
+  sleep_ms(200);
+
+  {
+    uint8_t num = 3;
+    uint8_t folder = 1;
+    uint8_t track = static_cast<uint8_t>(num);
+    uint16_t cmd = (folder << 8) | num;
+    dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+  }
 
   io16_dev1.init();
 
