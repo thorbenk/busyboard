@@ -22,3 +22,6 @@
 [submodule "3rdparty/raster-fonts"]
 	path = 3rdparty/raster-fonts
 	url = https://github.com/idispatch/raster-fonts
+[submodule "3rdparty/pico-ads1115"]
+	path = 3rdparty/pico-ads1115
+	url = https://github.com/antgon/pico-ads1115

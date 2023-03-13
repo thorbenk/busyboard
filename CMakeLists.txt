@@ -9,6 +9,7 @@ pico_sdk_init()
 
 include("3rdparty/PicoLed/PicoLed.cmake")
 include("3rdparty/TM1637-pico/PicoTM1637.cmake")
+include("3rdparty/pico-ads1115/lib/CMakeLists.txt")
 
 add_executable(busyboard 
   busyboard.cpp 
@@ -27,6 +28,10 @@ target_link_libraries(busyboard
   hardware_i2c
   hardware_spi
   PicoLed
+  pico-ads1115
 )
+pico_add_extra_outputs(busyboard)
+pico_enable_stdio_usb(busyboard 1)
+pico_enable_stdio_uart(busyboard 0)
 
 add_subdirectory(parts)

@@ -1,3 +1,7 @@
+#if 0
+
+// #define IO16_DEV2_ENABLED
+
 #include "hardware/i2c.h"
 #include "pico/stdlib.h"
 #include <pico/stdlib.h>
@@ -9,6 +13,9 @@
 
 #include <PicoLed.hpp>
 #include <pico7219/pico7219.h>
+extern "C" {
+#include "ads1115.h"
+}
 
 #include "color.h"
 #include "debounce.h"
@@ -48,7 +55,7 @@
 // GP 24
 // GP 25
 // GP 26
-// GP 27
+// GP 27 - IO expander 2 interrupt
 // GP 28 - IO expander 1 interrupt
 //----------------------------------------------------------------------------
 
@@ -59,6 +66,10 @@
 #define IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN 28
 #define IO_EXPAND_16_DEVICE_1_I2C_ADDRESS 0x20
 #define IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC 2
+#define IO_EXPAND_16_DEVICE_2_I2C_LANE i2c1
+#define IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN 27
+#define IO_EXPAND_16_DEVICE_2_I2C_ADDRESS 0x23
+#define IO_EXPAND_16_DEVICE_2_DEBOUNCE_MSEC 2
 #define ARCADE_BUTTONS_8_DIN_PIN 16
 #define ARCADE_BUTTONS_8_LED_LENGTH 8
 #define FAN_LED_LENGTH 6
@@ -78,6 +89,9 @@ constexpr auto grb_led_string_length =
 #define DFPLAYER_MINI_RX 8 /* GP 8 - TX (UART 1) */
 #define DFPLAYER_MINI_TX 9 /* GP 9 - RX (UART 1) */
 
+#define ADC_I2C_ADDR 0x48
+#define ADC_I2C_PORT i2c1
+
 #define FPS 60
 #define MS_PER_FRAME 16
 
@@ -90,6 +104,14 @@ enum class FaderMode { A, B, C };
 Debounce_PCF8575 io16_dev1(IO_EXPAND_16_DEVICE_1_I2C_LANE,
                            IO_EXPAND_16_DEVICE_1_I2C_ADDRESS,
                            IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC);
+
+#ifdef IO16_DEV2_ENABLED
+Debounce_PCF8575 io16_dev2(IO_EXPAND_16_DEVICE_2_I2C_LANE,
+                           IO_EXPAND_16_DEVICE_2_I2C_ADDRESS,
+                           IO_EXPAND_16_DEVICE_2_DEBOUNCE_MSEC);
+#endif
+
+struct ads1115_adc adc;
 
 volatile bool io16_device1_changed = true;
 std::optional<uint16_t> io16_device1_prev_state;
@@ -107,19 +129,15 @@ volatile bool frame_changed = true;
 
 //----------------------------------------------------------------------------
 
-auto read_pcf8575(i2c_inst_t *i2c, uint8_t addr) -> uint16_t {
-  int ret;
-  uint8_t rxdata[2];
-  ret = i2c_read_timeout_us(i2c, addr, rxdata, 2, true, 5 * 1000);
-  if (ret != 2) {
-    std::cerr << "read pcf8575: unexpected return value " << ret << std::endl;
-  }
-  return *reinterpret_cast<uint16_t *>(rxdata);
-}
-
 void io_expand16_device1_callback(uint gpio, uint32_t events) {
   io16_dev1.on_pcf8575_interrupt();
 }
+
+#ifdef IO16_DEV2_ENABLED
+void io_expand16_device2_callback(uint gpio, uint32_t events) {
+  io16_dev2.on_pcf8575_interrupt();
+}
+#endif
 
 auto calc_frame() -> void {
   auto constexpr duration_sec = 2;
@@ -269,7 +287,21 @@ int main() {
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
                                      true, &io_expand16_device1_callback);
 
-  add_alarm_in_ms(MS_PER_FRAME, on_frame, nullptr, false);
+#ifdef IO16_DEV2_ENABLED
+  gpio_init(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN);
+  gpio_set_dir(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN, GPIO_IN);
+  gpio_pull_up(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN);
+  gpio_set_irq_enabled_with_callback(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN,
+                                     GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+                                     true, &io_expand16_device2_callback);
+#endif
+
+  ads1115_init(ADC_I2C_PORT, ADC_I2C_ADDR, &adc);
+  ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
+  ads1115_set_input_mux(ADS1115_MUX_SINGLE_0, &adc);
+  ads1115_set_pga(ADS1115_PGA_4_096, &adc);
+  ads1115_set_data_rate(ADS1115_RATE_128_SPS, &adc);
+  ads1115_write_config(&adc);
 
   auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
       pio0, 0, ARCADE_BUTTONS_8_DIN_PIN, grb_led_string_length,
@@ -308,12 +340,17 @@ int main() {
   }
 
   io16_dev1.init();
+#ifdef IO16_DEV2_ENABLED
+  io16_dev2.init();
+#endif
 
   bool arcade8_num_changed = false;
 
+  add_alarm_in_ms(MS_PER_FRAME, on_frame, nullptr, false);
+
   while (true) {
     if (io16_dev1.loop()) {
-      std::cout << "io16 changed" << std::endl;
+      std::cout << "io16 dev 1 changed" << std::endl;
       auto const current_state = io16_dev1.state();
       for (auto i = 0; i < 16; ++i) {
         bool const current = ((1 << i) & current_state) > 0;
@@ -345,6 +382,11 @@ int main() {
       }
       io16_device1_prev_state = io16_dev1.state();
     }
+#ifdef IO16_DEV2_ENABLED
+    if (io16_dev2.loop()) {
+      std::cout << "io16 dev 2 changed" << std::endl;
+    }
+#endif
 
     if (frame_changed) {
       auto start = time_us_32();
@@ -382,8 +424,172 @@ int main() {
         std::cout << "frame time min=" << frame_usec_min
                   << ", max=" << frame_usec_max << " usec" << std::endl;
       }
+      if (state.tick % FPS == 0) {
+        uint16_t adc_value;
+        ads1115_read_adc(&adc_value, &adc);
+        //adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
+        std::cout << "ADC: " << adc_value << std::endl;
+      }
     }
   }
 
   return 0;
 }
+#else
+/**
+ * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+// Sweep through all 7-bit I2C addresses, to see if any slaves are present on
+// the I2C bus. Print out a table that looks like this:
+//
+// I2C Bus Scan
+//   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+// 0
+// 1       @
+// 2
+// 3             @
+// 4
+// 5
+// 6
+// 7
+//
+// E.g. if slave addresses 0x12 and 0x34 were acknowledged.
+
+#include "hardware/i2c.h"
+#include "pico/binary_info.h"
+#include "pico/stdlib.h"
+#include <stdio.h>
+
+extern "C" {
+#include "ads1115.h"
+}
+#define ADC_I2C_ADDR 0x48
+#define ADC_I2C_PORT i2c1
+
+#include <bitset>
+#include <iostream>
+
+auto read_pcf8575(i2c_inst_t *i2c, uint8_t addr) -> uint16_t {
+  int ret;
+  uint8_t rxdata[2] = {0, 0};
+  ret = i2c_read_timeout_us(i2c, addr, rxdata, 2, true, 5 * 1000);
+  if (ret != 2) {
+    std::cerr << "read pcf8575@" << std::hex << addr
+              << " : unexpected return value " << std::dec << ret << std::endl;
+  }
+  return *reinterpret_cast<uint16_t *>(rxdata);
+}
+
+// I2C reserves some addresses for special purposes. We exclude these from the
+// scan. These are any addresses of the form 000 0xxx or 111 1xxx
+bool reserved_addr(uint8_t addr) {
+  return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
+}
+
+struct ads1115_adc adc;
+
+int main() {
+  // Enable UART so we can print status output
+  stdio_init_all();
+#if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) ||             \
+    !defined(PICO_DEFAULT_I2C_SCL_PIN)
+#warning i2c/bus_scan example requires a board with I2C pins
+  puts("Default I2C pins were not defined");
+#else
+  // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a
+  // Pico)
+  i2c_init(i2c1, 100 * 1000);
+  gpio_set_function(2, GPIO_FUNC_I2C);
+  gpio_set_function(3, GPIO_FUNC_I2C);
+  gpio_pull_up(2);
+  gpio_pull_up(3);
+
+  ads1115_init(ADC_I2C_PORT, ADC_I2C_ADDR, &adc);
+  ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
+  ads1115_set_input_mux(ADS1115_MUX_SINGLE_0, &adc);
+  ads1115_set_pga(ADS1115_PGA_4_096, &adc);
+  ads1115_set_data_rate(ADS1115_RATE_128_SPS, &adc);
+  ads1115_write_config(&adc);
+
+  uint16_t adc_value;
+  float adc_value_f;
+
+#if 0
+    std::cout << "IO expander initialisation" << std::endl;
+    for (int i = 0; i < 3; ++i) {
+      uint8_t rxdata[2] = {0xff, 0xff};
+      auto ret = i2c_write_blocking(i2c1, 0x23, rxdata, 2, false);
+      std::cout << "  try " << i << " : RET = " << ret << std::endl;
+      if (ret == PICO_ERROR_GENERIC) {
+         std::cout << "generic = " << ret << std::endl;
+      }
+      sleep_ms(100);
+      auto pins = read_pcf8575(i2c1, 0x23);
+      std::cout << "  IO expander says: " << std::bitset<16>(pins) << std::endl;
+      sleep_ms(100);
+    }
+    std::cout << "IO expander init done." << std::endl;
+#endif
+
+  while (true) {
+    /*
+    printf("\nI2C Bus Scan\n");
+    printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
+
+    for (int addr = 0; addr < (1 << 7); ++addr) {
+        if (addr % 16 == 0) {
+            printf("%02x ", addr);
+        }
+
+        // Perform a 1-byte dummy read from the probe address. If a slave
+        // acknowledges this address, the function returns the number of bytes
+        // transferred. If the address byte is ignored, the function returns
+        // -1.
+
+        // Skip over any reserved addresses.
+        int ret;
+        uint8_t rxdata;
+        if (reserved_addr(addr))
+            ret = PICO_ERROR_GENERIC;
+        else
+            ret = i2c_read_blocking(i2c1, addr, &rxdata, 1, false);
+
+        printf(ret < 0 ? "." : "@");
+        printf(addr % 16 == 15 ? "\n" : "  ");
+    }
+    printf("Done.\n");
+    */
+
+    //    //auto v1 = read_pcf8575(i2c1, 0x20);
+    //    auto v2 = read_pcf8575(i2c1, 0x23);
+    //
+    //    //std::cout << std::bitset<16>(v1) << std::endl;
+    //    std::cout << std::bitset<16>(v2) << std::endl;
+    //
+    ads1115_mux_t channels[4] = {ADS1115_MUX_SINGLE_0, ADS1115_MUX_SINGLE_1,
+                                 ADS1115_MUX_SINGLE_2, ADS1115_MUX_SINGLE_3};
+    uint16_t adc_values[4] = {0, 0, 0, 0};
+    for (int k = 0; k < 4; ++k) {
+      ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
+      ads1115_set_input_mux(channels[k], &adc);
+      ads1115_set_pga(ADS1115_PGA_4_096, &adc);
+      ads1115_set_data_rate(ADS1115_RATE_860_SPS, &adc);
+      ads1115_write_config(&adc);
+      sleep_ms(5);
+      ads1115_read_adc(&adc_values[k], &adc);
+    }
+    std::cout << "ADC: ";
+    for (int k = 0; k < 4; ++k) {
+      std::cout << adc_values[k] << " ";
+    }
+    std::cout << std::endl;
+
+    sleep_ms(200);
+  }
+  return 0;
+#endif
+}
+#endif
