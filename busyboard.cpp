@@ -1,4 +1,4 @@
-#if 0
+#if 1
 
 // #define IO16_DEV2_ENABLED
 
@@ -32,7 +32,7 @@ extern "C" {
 // GP  1 - stdio RX
 // GP  2 - I2C1 SDA
 // GP  3 - I2C1 SCL
-// GP  4
+// GP  4 - data in for WS2812b: 3 WGRB (fader panel)
 // GP  5
 // GP  6
 // GP  8 - UART1 TX -> DF Player Mini
@@ -78,6 +78,16 @@ constexpr auto fan_led_format = PicoLed::FORMAT_GRB;
 static_assert(arcade_buttons_8_led_format == fan_led_format);
 constexpr auto grb_led_string_length =
     ARCADE_BUTTONS_8_LED_LENGTH + FAN_LED_LENGTH;
+
+#define FADER_LED_LENGTH 3
+#define ANALOG_METER_LED_LENGTH 8
+#define FADER_AND_ANALOG_METER_DIN_PIN 4
+constexpr auto fader_led_format = PicoLed::FORMAT_WGRB;
+constexpr auto analog_meter_led_format = PicoLed::FORMAT_WGRB;
+static_assert(fader_led_format == analog_meter_led_format);
+constexpr auto fader_and_analog_meter_led_string_length =
+    FADER_LED_LENGTH + ANALOG_METER_LED_LENGTH;
+
 #define DOT_MATRIX_SPI_CHAN PicoSpiNum::PICO_SPI_1
 #define DOT_MATRIX_SPI_SCK 10
 #define DOT_MATRIX_SPI_TX 11
@@ -303,9 +313,13 @@ int main() {
   ads1115_set_data_rate(ADS1115_RATE_128_SPS, &adc);
   ads1115_write_config(&adc);
 
-  auto ledStrip = PicoLed::addLeds<PicoLed::WS2812B>(
+  auto arcade_and_fan_leds = PicoLed::addLeds<PicoLed::WS2812B>(
       pio0, 0, ARCADE_BUTTONS_8_DIN_PIN, grb_led_string_length,
       arcade_buttons_8_led_format);
+
+  auto fader_and_analog_meter_leds = PicoLed::addLeds<PicoLed::WS2812B>(
+      pio0, 1, FADER_AND_ANALOG_METER_DIN_PIN,
+      fader_and_analog_meter_led_string_length, fader_led_format);
 
   Pico7219 *dot_matrix = pico7219_create(
       DOT_MATRIX_SPI_CHAN, DOT_MATRIX_SPI_BAUDRATE, DOT_MATRIX_SPI_TX,
@@ -313,10 +327,21 @@ int main() {
 
   pico7219_switch_off_all(dot_matrix, false);
 
-  ledStrip.setBrightness(255);
-  ledStrip.clear();
-  ledStrip.fill(PicoLed::RGB(0, 0, 64));
-  ledStrip.show();
+  arcade_and_fan_leds.setBrightness(255);
+  arcade_and_fan_leds.clear();
+  arcade_and_fan_leds.fill(PicoLed::RGB(0, 0, 64));
+  arcade_and_fan_leds.show();
+
+  fader_and_analog_meter_leds.setBrightness(255);
+  fader_and_analog_meter_leds.clear();
+  fader_and_analog_meter_leds.setPixelColor(0, PicoLed::RGB(64, 0, 0));
+  fader_and_analog_meter_leds.setPixelColor(1, PicoLed::RGB(0, 64, 0));
+  fader_and_analog_meter_leds.setPixelColor(2, PicoLed::RGB(0, 0, 64));
+  for (int i = FADER_LED_LENGTH; i < fader_and_analog_meter_led_string_length;
+       ++i) {
+    fader_and_analog_meter_leds.setPixelColor(i, PicoLed::RGBW(0, 0, 0, 128));
+  }
+  fader_and_analog_meter_leds.show();
 
   draw_string(dot_matrix, "LUAN", false);
   pico7219_set_intensity(dot_matrix, 0);
@@ -393,9 +418,9 @@ int main() {
       calc_frame();
       frame_changed = false;
       for (int i = 0; i < grb_led_string_length; ++i) {
-        ledStrip.setPixelColor(i, state.grb_led_string[i]);
+        arcade_and_fan_leds.setPixelColor(i, state.grb_led_string[i]);
       }
-      ledStrip.show();
+      arcade_and_fan_leds.show();
       if (arcade8_num_changed) {
         std::cout << "update dot matrix" << std::endl;
         char b[4] = {0, 0, 0, 0};
@@ -427,7 +452,7 @@ int main() {
       if (state.tick % FPS == 0) {
         uint16_t adc_value;
         ads1115_read_adc(&adc_value, &adc);
-        //adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
+        // adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
         std::cout << "ADC: " << adc_value << std::endl;
       }
     }
