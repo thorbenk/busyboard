@@ -49,8 +49,8 @@ extern "C" {
 // GP 18
 // GP 19
 // GP 20
-// GP 21
-// GP 22
+// GP 21 - phone dial: pulsed number
+// GP 22 - phone dial: dial in progress
 // GP 23
 // GP 24
 // GP 25
@@ -91,6 +91,9 @@ constexpr auto fader_and_analog_meter_led_string_length =
 #define PHONE_LEDS_DIN_PIN 26
 #define PHONE_LEDS_LENGTH 9
 constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
+
+#define PHONE_DIAL_IN_PROGRESS_PIN 22
+#define PHONE_DIAL_PULSED_NUMBER 21
 
 #define DOT_MATRIX_SPI_CHAN PicoSpiNum::PICO_SPI_1
 #define DOT_MATRIX_SPI_SCK 10
@@ -138,10 +141,12 @@ struct State {
   uint32_t tick = 0;
   PicoLed::Color grb_led_string[grb_led_string_length];
   PicoLed::Color fader_analog_string[fader_and_analog_meter_led_string_length];
+  PicoLed::Color phone_leds[PHONE_LEDS_LENGTH];
   FaderMode fader_mode = FaderMode::RGB;
   bool toggle_upper_left = false;
   uint8_t faders[4] = {0, 0, 0, 0};
   uint8_t fader_adc = 0;
+  bool dial_in_progress = false;
 };
 
 State state;
@@ -257,6 +262,20 @@ auto calc_frame() -> void {
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   }
+
+  if (state.dial_in_progress) {
+    float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
+    float step = 360.f / float(PHONE_LEDS_LENGTH);
+    for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+      auto const [r, g, b] =
+          hsv_to_rgb(std::fmod(angle + i * step, 360.f), 1.0, 255);
+      state.phone_leds[i] = PicoLed::RGB(r, g, b);
+    }
+  } else {
+    for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+      state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 32);
+    }
+  }
 }
 
 int64_t on_frame(alarm_id_t id, void *user_data) {
@@ -352,6 +371,14 @@ int main() {
   gpio_set_function(I2C_1_SDL_PIN, GPIO_FUNC_I2C);
   gpio_pull_up(I2C_1_SDA_PIN);
   gpio_pull_up(I2C_1_SDL_PIN);
+
+  gpio_init(PHONE_DIAL_IN_PROGRESS_PIN);
+  gpio_set_dir(PHONE_DIAL_IN_PROGRESS_PIN, GPIO_IN);
+  gpio_pull_up(PHONE_DIAL_IN_PROGRESS_PIN);
+
+  gpio_init(PHONE_DIAL_PULSED_NUMBER);
+  gpio_set_dir(PHONE_DIAL_PULSED_NUMBER, GPIO_IN);
+  gpio_pull_up(PHONE_DIAL_PULSED_NUMBER);
 
   gpio_init(IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN);
   gpio_set_dir(IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN, GPIO_IN);
@@ -489,6 +516,9 @@ int main() {
 
       read_adc();
 
+      // FIXME
+      state.dial_in_progress = !gpio_get(PHONE_DIAL_IN_PROGRESS_PIN);
+
       calc_frame();
       frame_changed = false;
       for (int i = 0; i < grb_led_string_length; ++i) {
@@ -501,6 +531,11 @@ int main() {
                                                   state.fader_analog_string[i]);
       }
       fader_and_analog_meter_leds.show();
+
+      for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+        phone_leds.setPixelColor(i, state.phone_leds[i]);
+      }
+      phone_leds.show();
 
       if (arcade8_num_changed) {
         std::cout << "update dot matrix" << std::endl;
