@@ -1,5 +1,3 @@
-#if 1
-
 // #define IO16_DEV2_ENABLED
 
 #include "hardware/i2c.h"
@@ -46,11 +44,11 @@ extern "C" {
 //
 // GP 16 - data in for WS2812b: string of 8 arcade buttons and 6 LEDs in fan
 // GP 17
-// GP 18
+// GP 18 - phone dial: pulsed number (brown cable)
 // GP 19
 // GP 20
-// GP 21 - phone dial: pulsed number
-// GP 22 - phone dial: dial in progress
+// GP 21 
+// GP 22 - phone dial: dial in progress (green cable)
 // GP 23
 // GP 24
 // GP 25
@@ -93,7 +91,7 @@ constexpr auto fader_and_analog_meter_led_string_length =
 constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 
 #define PHONE_DIAL_IN_PROGRESS_PIN 22
-#define PHONE_DIAL_PULSED_NUMBER 21
+#define PHONE_DIAL_PULSED_NUMBER 18
 
 #define DOT_MATRIX_SPI_CHAN PicoSpiNum::PICO_SPI_1
 #define DOT_MATRIX_SPI_SCK 10
@@ -114,6 +112,8 @@ constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 
 enum class FaderMode { RGB, HSV, Effect };
 
+enum class ArcadeMode { Binary, Names };
+
 constexpr uint16_t fader_min_max[4][2]{
     {72, 19813}, {64, 19707}, {121, 19657}, {84, 19787}};
 
@@ -131,6 +131,9 @@ Debounce_PCF8575 io16_dev2(IO_EXPAND_16_DEVICE_2_I2C_LANE,
                            IO_EXPAND_16_DEVICE_2_DEBOUNCE_MSEC);
 #endif
 
+// DebounceEdge phone_pulse(5);
+DebounceEdge phone_dialing_in_progress(50);
+
 struct ads1115_adc adc;
 
 volatile bool io16_device1_changed = true;
@@ -143,10 +146,14 @@ struct State {
   PicoLed::Color fader_analog_string[fader_and_analog_meter_led_string_length];
   PicoLed::Color phone_leds[PHONE_LEDS_LENGTH];
   FaderMode fader_mode = FaderMode::RGB;
-  bool toggle_upper_left = false;
+  ArcadeMode arcade_mode = ArcadeMode::Binary;
+  bool toggle_upper_left = true; // FIXME
   uint8_t faders[4] = {0, 0, 0, 0};
   uint8_t fader_adc = 0;
   bool dial_in_progress = false;
+  int8_t phone_dialed_num = -1;
+  int8_t switch6 = 0;
+  bool scroll_dotmatrix = false;
 };
 
 State state;
@@ -154,15 +161,20 @@ volatile bool frame_changed = true;
 
 //----------------------------------------------------------------------------
 
-void io_expand16_device1_callback(uint gpio, uint32_t events) {
-  io16_dev1.on_pcf8575_interrupt();
-}
-
+void gpio_interrupt(uint gpio, uint32_t events) {
+  if (gpio == PHONE_DIAL_PULSED_NUMBER) {
+    // phone_pulse.on_event(events);
+  } else if (gpio == PHONE_DIAL_IN_PROGRESS_PIN) {
+    phone_dialing_in_progress.on_event(events);
+  } else if (gpio == IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN) {
+    io16_dev1.on_pcf8575_interrupt();
+  }
 #ifdef IO16_DEV2_ENABLED
-void io_expand16_device2_callback(uint gpio, uint32_t events) {
-  io16_dev2.on_pcf8575_interrupt();
-}
+  else if (gpio == IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN) {
+    io16_dev2.on_pcf8575_interrupt();
+  }
 #endif
+}
 
 auto read_adc() -> void {
   constexpr ads1115_mux_t channels[4] = {
@@ -227,6 +239,9 @@ auto calc_frame() -> void {
     state.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
   }
 
+  //
+  // arcade buttons RGB lights
+  //
   for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
     float v_arcade = v;
     if (!state.toggle_upper_left)
@@ -243,6 +258,9 @@ auto calc_frame() -> void {
     }
   }
 
+  //
+  // fan RGB lights
+  //
   for (int i = ARCADE_BUTTONS_8_LED_LENGTH; i < grb_led_string_length; ++i) {
     if (state.fader_mode == FaderMode::RGB) {
       state.grb_led_string[i] =
@@ -272,8 +290,16 @@ auto calc_frame() -> void {
       state.phone_leds[i] = PicoLed::RGB(r, g, b);
     }
   } else {
-    for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-      state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 32);
+    if (state.phone_dialed_num >= 0) {
+      for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+        state.phone_leds[i] = i < state.phone_dialed_num
+                                  ? PicoLed::RGB(0, 32, 0)
+                                  : PicoLed::RGB(32, 0, 0);
+      }
+    } else {
+      for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+        state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 32);
+      }
     }
   }
 }
@@ -330,7 +356,7 @@ void draw_string(Pico7219 *pico7219, const char *s, BOOL flush) {
 // Get the number of horizontal pixels that a string will take. Since each
 // font element is five pixels wide, and there is one pixel between each
 // character, we just multiply the string length by 6.
-int get_string_length_pixels(const char *s) { return std::strlen(s) * 6; }
+int get_string_length_pixels(const char *s) { return std::strlen(s) * 8; }
 
 // Get the number of 8x8 LED modules that would be needed to accomodate the
 // string of text. That's the number of pixels divided by 8 (the module
@@ -351,14 +377,6 @@ void show_text_and_scroll(Pico7219 *pico7219, const char *string) {
   pico7219_flush(pico7219);
 
   int l = get_string_length_pixels(string);
-
-  for (int i = 0; i < l; i++) {
-    sleep_ms(50);
-    pico7219_scroll(pico7219, FALSE);
-  }
-
-  pico7219_switch_off_all(pico7219, TRUE);
-  sleep_ms(500);
 }
 
 //----------------------------------------------------------------------------
@@ -375,17 +393,23 @@ int main() {
   gpio_init(PHONE_DIAL_IN_PROGRESS_PIN);
   gpio_set_dir(PHONE_DIAL_IN_PROGRESS_PIN, GPIO_IN);
   gpio_pull_up(PHONE_DIAL_IN_PROGRESS_PIN);
+  gpio_set_irq_enabled_with_callback(PHONE_DIAL_IN_PROGRESS_PIN,
+                                     GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+                                     true, &gpio_interrupt);
 
   gpio_init(PHONE_DIAL_PULSED_NUMBER);
   gpio_set_dir(PHONE_DIAL_PULSED_NUMBER, GPIO_IN);
   gpio_pull_up(PHONE_DIAL_PULSED_NUMBER);
+  gpio_set_irq_enabled_with_callback(PHONE_DIAL_PULSED_NUMBER,
+                                     GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+                                     true, &gpio_interrupt);
 
   gpio_init(IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN);
   gpio_set_dir(IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN, GPIO_IN);
   gpio_pull_up(IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN);
   gpio_set_irq_enabled_with_callback(IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN,
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-                                     true, &io_expand16_device1_callback);
+                                     true, &gpio_interrupt);
 
 #ifdef IO16_DEV2_ENABLED
   gpio_init(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN);
@@ -441,7 +465,6 @@ int main() {
   phone_leds.fill(PicoLed::RGBW(0, 0, 0, 16));
   phone_leds.show();
 
-  draw_string(dot_matrix, "LUAN", false);
   pico7219_set_intensity(dot_matrix, 0);
   pico7219_flush(dot_matrix);
 
@@ -454,14 +477,6 @@ int main() {
   dfp.specifyVolume(10);
   sleep_ms(200);
 
-  {
-    uint8_t num = 3;
-    uint8_t folder = 1;
-    uint8_t track = static_cast<uint8_t>(num);
-    uint16_t cmd = (folder << 8) | num;
-    dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
-  }
-
   io16_dev1.init();
 #ifdef IO16_DEV2_ENABLED
   io16_dev2.init();
@@ -471,37 +486,96 @@ int main() {
 
   add_alarm_in_ms(MS_PER_FRAME, on_frame, nullptr, false);
 
+  int phone_dialing_prev = 0;
+
+  uint32_t pulse_time[2] = {time_us_32(), time_us_32()};
+  bool last_num_switch = false;
+  int num = -1;
+  int display_num = -1;
+  int last_display_num = -1;
+
   while (true) {
+    {
+      bool const dial_in_progress = !gpio_get(PHONE_DIAL_IN_PROGRESS_PIN);
+      bool const num_switched = gpio_get(PHONE_DIAL_PULSED_NUMBER);
+
+      pulse_time[num_switched] = time_us_32();
+
+      if (dial_in_progress) {
+        if (num == -1) {
+          num = 0;
+        };
+        uint32_t t1 = pulse_time[0];
+        uint32_t t2 = pulse_time[1];
+        if (t1 > t2) {
+          uint32_t tmp = t1;
+          t1 = t2;
+          t2 = tmp;
+        }
+        if (last_num_switch != num_switched && t2 - t1 > 5 * 1000) {
+          num += 1;
+          last_num_switch = num_switched;
+        }
+      } else {
+        if (display_num != num && num > 0) {
+          num = num / 2;
+          if (num == 10) {
+            num = 0;
+          }
+          display_num = num;
+          num = -1;
+          last_num_switch = false;
+          state.phone_dialed_num = display_num;
+        }
+      }
+    }
+
     if (io16_dev1.loop()) {
-      std::cout << "io16 dev 1 changed" << std::endl;
       auto const current_state = io16_dev1.state();
+      state.switch6 = 0;
       for (auto i = 0; i < 16; ++i) {
         bool const current = ((1 << i) & current_state) > 0;
         bool const prev = io16_device1_prev_state.has_value()
                               ? (((1 << i) & *io16_device1_prev_state) > 0)
                               : (!current);
-        if (prev != current) {
-          std::cout << "button " << i << " : " << (int)prev << " -> "
-                    << (int)current << std::endl;
-        }
         if (i < 8 && prev == 1 && current == 0) {
           arcade8_num_changed = true;
           // this means the button was pressed down.
-          state.buttons_8 ^= (1 << i);
-          std::cout << "button 8 = " << (int)state.buttons_8 << std::endl;
+          if (state.arcade_mode == ArcadeMode::Binary) {
+            state.buttons_8 ^= (1 << i);
+          } else {
+            state.buttons_8 = (1 << i);
+          }
         }
         if (i == 8 && prev == 1 && current == 0) {
-          std::cout << "fader push A" << std::endl;
           state.fader_mode = FaderMode::RGB;
         } else if (i == 9 && prev == 1 && current == 0) {
-          std::cout << "fader push B" << std::endl;
           state.fader_mode = FaderMode::HSV;
         } else if (i == 10 && prev == 1 && current == 0) {
-          std::cout << "fader push C" << std::endl;
           state.fader_mode = FaderMode::Effect;
-        } else if (i == 11) {
-          state.toggle_upper_left = (current == 1);
+          //} else if (i == 11) {
+          //  state.toggle_upper_left = (current == 1);
+        } else if (i >= 11 && i < 16) {
+          if (current == 0) {
+            // wiring mistakes where made
+            if (i == 11 + 3) {
+              state.switch6 = 1;
+            } else if (i == 11 + 4) {
+              state.switch6 = 2;
+            } else if (i == 11 + 0) {
+              state.switch6 = 3;
+            } else if (i == 11 + 1) {
+              state.switch6 = 4;
+            } else if (i == 11 + 2) {
+              state.switch6 = 5;
+            }
+          }
         }
+      }
+      if (state.switch6 == 0) {
+        state.arcade_mode = ArcadeMode::Binary;
+      } else {
+        state.arcade_mode = ArcadeMode::Names;
       }
       io16_device1_prev_state = io16_dev1.state();
     }
@@ -516,11 +590,21 @@ int main() {
 
       read_adc();
 
-      // FIXME
-      state.dial_in_progress = !gpio_get(PHONE_DIAL_IN_PROGRESS_PIN);
-
       calc_frame();
       frame_changed = false;
+
+      if (state.scroll_dotmatrix && state.tick % 5 == 0) {
+        pico7219_scroll(dot_matrix, true);
+      }
+
+      if (last_display_num != state.phone_dialed_num) {
+        uint8_t folder = 1;
+        uint8_t track = static_cast<uint8_t>(state.phone_dialed_num);
+        uint16_t cmd = (folder << 8) | state.phone_dialed_num;
+        dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+        last_display_num = state.phone_dialed_num;
+      }
+
       for (int i = 0; i < grb_led_string_length; ++i) {
         arcade_and_fan_leds.setPixelColor(i, state.grb_led_string[i]);
       }
@@ -539,24 +623,48 @@ int main() {
 
       if (arcade8_num_changed) {
         std::cout << "update dot matrix" << std::endl;
-        char b[4] = {0, 0, 0, 0};
-        char b2[4] = {' ', ' ', ' ', 0};
-        itoa(state.buttons_8, b, 10);
-        if (state.buttons_8 >= 100)
-          std::copy(b, b + 3, b2 + 1);
-        else if (state.buttons_8 >= 10)
-          std::copy(b, b + 2, b2 + 2);
-        else
-          std::copy(b, b + 2, b2 + 3);
-
         pico7219_switch_off_all(dot_matrix, false);
-        draw_string(dot_matrix, b2, false);
+        if (state.arcade_mode == ArcadeMode::Binary) {
+          char b[4] = {0, 0, 0, 0};
+          char b2[4] = {' ', ' ', ' ', 0};
+          itoa(state.buttons_8, b, 10);
+          if (state.buttons_8 >= 100)
+            std::copy(b, b + 3, b2 + 1);
+          else if (state.buttons_8 >= 10)
+            std::copy(b, b + 2, b2 + 2);
+          else
+            std::copy(b, b + 2, b2 + 3);
+          draw_string(dot_matrix, b2, false);
+        } else {
+          state.scroll_dotmatrix = false;
+          if (state.buttons_8 == 1) {
+            draw_string(dot_matrix, "MAMA", false);
+          }
+          if (state.buttons_8 == 2) {
+            draw_string(dot_matrix, "PAPA", false);
+          }
+          if (state.buttons_8 == 4) {
+            state.scroll_dotmatrix = true;
+            show_text_and_scroll(dot_matrix, "JANNIS    ");
+          }
+          if (state.buttons_8 == 8) {
+            draw_string(dot_matrix, "MARA", false);
+          }
+          if (state.buttons_8 == 16) {
+            draw_string(dot_matrix, "LUAN", false);
+          }
+        }
+
         pico7219_flush(dot_matrix);
 
         arcade8_num_changed = false;
       }
       auto end = time_us_32();
 
+      if (state.tick % FPS == 0) {
+        std::cout << (int)state.switch6 << std::endl;
+      }
+#if 0
       // debug frames per second
       auto dur = end - start;
       frame_usec_max = std::max(frame_usec_max, dur);
@@ -569,169 +677,21 @@ int main() {
         for (int k = 0; k < 4; ++k) {
           // adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
           std::cout << "ADC: " << (int)state.faders[k] << " ";
+
         }
         std::cout << std::endl;
+
+        std::cout << "phone dialing: " << phone_pulse.rising_edge_count_ << ", "
+          << phone_pulse.falling_edge_count_ << std::endl;
+        std::cout << "phone dialing_in_progress: " << phone_dialing_in_progress.rising_edge_count_ << ", "
+          << phone_dialing_in_progress.falling_edge_count_ << std::endl;
+        std::cout << "phone pulse: " << phone_pulse.rising_edge_count_ << ", "
+          << phone_pulse.falling_edge_count_ << std::endl;
+        std::cout << "phone dialed nunm " << (int)state.phone_dialed_num << std::endl;
       }
+#endif
     }
   }
 
   return 0;
 }
-#else
-/**
- * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- */
-
-// Sweep through all 7-bit I2C addresses, to see if any slaves are present on
-// the I2C bus. Print out a table that looks like this:
-//
-// I2C Bus Scan
-//   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0
-// 1       @
-// 2
-// 3             @
-// 4
-// 5
-// 6
-// 7
-//
-// E.g. if slave addresses 0x12 and 0x34 were acknowledged.
-
-#include "hardware/i2c.h"
-#include "pico/binary_info.h"
-#include "pico/stdlib.h"
-#include <stdio.h>
-
-extern "C" {
-#include "ads1115.h"
-}
-#define ADC_I2C_ADDR 0x48
-#define ADC_I2C_PORT i2c1
-
-#include <bitset>
-#include <iostream>
-
-auto read_pcf8575(i2c_inst_t *i2c, uint8_t addr) -> uint16_t {
-  int ret;
-  uint8_t rxdata[2] = {0, 0};
-  ret = i2c_read_timeout_us(i2c, addr, rxdata, 2, true, 5 * 1000);
-  if (ret != 2) {
-    std::cerr << "read pcf8575@" << std::hex << addr
-              << " : unexpected return value " << std::dec << ret << std::endl;
-  }
-  return *reinterpret_cast<uint16_t *>(rxdata);
-}
-
-// I2C reserves some addresses for special purposes. We exclude these from the
-// scan. These are any addresses of the form 000 0xxx or 111 1xxx
-bool reserved_addr(uint8_t addr) {
-  return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
-}
-
-struct ads1115_adc adc;
-
-int main() {
-  // Enable UART so we can print status output
-  stdio_init_all();
-#if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) ||             \
-    !defined(PICO_DEFAULT_I2C_SCL_PIN)
-#warning i2c/bus_scan example requires a board with I2C pins
-  puts("Default I2C pins were not defined");
-#else
-  // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a
-  // Pico)
-  i2c_init(i2c1, 100 * 1000);
-  gpio_set_function(2, GPIO_FUNC_I2C);
-  gpio_set_function(3, GPIO_FUNC_I2C);
-  gpio_pull_up(2);
-  gpio_pull_up(3);
-
-  ads1115_init(ADC_I2C_PORT, ADC_I2C_ADDR, &adc);
-  ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
-  ads1115_set_input_mux(ADS1115_MUX_SINGLE_0, &adc);
-  ads1115_set_pga(ADS1115_PGA_4_096, &adc);
-  ads1115_set_data_rate(ADS1115_RATE_128_SPS, &adc);
-  ads1115_write_config(&adc);
-
-  uint16_t adc_value;
-  float adc_value_f;
-
-#if 0
-    std::cout << "IO expander initialisation" << std::endl;
-    for (int i = 0; i < 3; ++i) {
-      uint8_t rxdata[2] = {0xff, 0xff};
-      auto ret = i2c_write_blocking(i2c1, 0x23, rxdata, 2, false);
-      std::cout << "  try " << i << " : RET = " << ret << std::endl;
-      if (ret == PICO_ERROR_GENERIC) {
-         std::cout << "generic = " << ret << std::endl;
-      }
-      sleep_ms(100);
-      auto pins = read_pcf8575(i2c1, 0x23);
-      std::cout << "  IO expander says: " << std::bitset<16>(pins) << std::endl;
-      sleep_ms(100);
-    }
-    std::cout << "IO expander init done." << std::endl;
-#endif
-
-  while (true) {
-    /*
-    printf("\nI2C Bus Scan\n");
-    printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
-
-    for (int addr = 0; addr < (1 << 7); ++addr) {
-        if (addr % 16 == 0) {
-            printf("%02x ", addr);
-        }
-
-        // Perform a 1-byte dummy read from the probe address. If a slave
-        // acknowledges this address, the function returns the number of bytes
-        // transferred. If the address byte is ignored, the function returns
-        // -1.
-
-        // Skip over any reserved addresses.
-        int ret;
-        uint8_t rxdata;
-        if (reserved_addr(addr))
-            ret = PICO_ERROR_GENERIC;
-        else
-            ret = i2c_read_blocking(i2c1, addr, &rxdata, 1, false);
-
-        printf(ret < 0 ? "." : "@");
-        printf(addr % 16 == 15 ? "\n" : "  ");
-    }
-    printf("Done.\n");
-    */
-
-    //    //auto v1 = read_pcf8575(i2c1, 0x20);
-    //    auto v2 = read_pcf8575(i2c1, 0x23);
-    //
-    //    //std::cout << std::bitset<16>(v1) << std::endl;
-    //    std::cout << std::bitset<16>(v2) << std::endl;
-    //
-    ads1115_mux_t channels[4] = {ADS1115_MUX_SINGLE_0, ADS1115_MUX_SINGLE_1,
-                                 ADS1115_MUX_SINGLE_2, ADS1115_MUX_SINGLE_3};
-    uint16_t adc_values[4] = {0, 0, 0, 0};
-    for (int k = 0; k < 4; ++k) {
-      ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
-      ads1115_set_input_mux(channels[k], &adc);
-      ads1115_set_pga(ADS1115_PGA_4_096, &adc);
-      ads1115_set_data_rate(ADS1115_RATE_860_SPS, &adc);
-      ads1115_write_config(&adc);
-      sleep_ms(5);
-      ads1115_read_adc(&adc_values[k], &adc);
-    }
-    std::cout << "ADC: ";
-    for (int k = 0; k < 4; ++k) {
-      std::cout << adc_values[k] << " ";
-    }
-    std::cout << std::endl;
-
-    sleep_ms(200);
-  }
-  return 0;
-#endif
-}
-#endif

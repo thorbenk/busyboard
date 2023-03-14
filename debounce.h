@@ -3,6 +3,44 @@
 #include "pico/stdlib.h"
 
 int64_t debounce_alarm(alarm_id_t id, void *user_data);
+int64_t debounce_alarm_edge(alarm_id_t id, void *user_data);
+
+enum class StateChange { None, Rising, Falling };
+
+class DebounceEdge {
+public:
+  DebounceEdge(uint32_t debounce_ms) : debounce_ms_(debounce_ms) {}
+  void on_event(uint32_t events) {
+    if (debounce_ms_ == 0) {
+      if (events & GPIO_IRQ_EDGE_FALL)
+        falling_edge_count_ += 1;
+      else if (events & GPIO_IRQ_EDGE_RISE)
+        rising_edge_count_ += 1;
+    } else {
+      if (events & GPIO_IRQ_EDGE_FALL)
+        state_pending_ = StateChange::Falling;
+      else if (events & GPIO_IRQ_EDGE_RISE)
+        state_pending_ = StateChange::Rising;
+      else
+        state_pending_ = StateChange::None;
+      if (!alarm_running_) {
+        add_alarm_in_ms(debounce_ms_, debounce_alarm_edge, this, true);
+        alarm_running_ = true;
+      }
+    }
+  }
+
+  auto reset() -> void {
+    rising_edge_count_ = 0;
+    falling_edge_count_ = 0;
+  }
+
+  bool alarm_running_ = false;
+  uint32_t debounce_ms_ = 4;
+  volatile int rising_edge_count_ = 0;
+  volatile int falling_edge_count_ = 0;
+  volatile mutable StateChange state_pending_ = StateChange::None;
+};
 
 class Debounce {
 public:

@@ -25,6 +25,17 @@ int64_t debounce_alarm(alarm_id_t id, void *user_data) {
   return 0;
 }
 
+int64_t debounce_alarm_edge(alarm_id_t id, void *user_data) {
+  DebounceEdge *d = reinterpret_cast<DebounceEdge *>(user_data);
+  if (d->state_pending_ == StateChange::Rising)
+    d->rising_edge_count_ += 1;
+  if (d->state_pending_ == StateChange::Falling)
+    d->falling_edge_count_ += 1;
+  d->state_pending_ = StateChange::None;
+  d->alarm_running_ = false;
+  return 0;
+}
+
 Debounce_PCF8575::Debounce_PCF8575(i2c_inst_t *i2c, uint8_t addr,
                                    uint32_t debounce_ms)
     : i2c_(i2c), i2c_address_(addr), debounce_ms_(debounce_ms) {
