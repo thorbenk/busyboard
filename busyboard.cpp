@@ -54,7 +54,7 @@ extern "C" {
 // GP 23
 // GP 24
 // GP 25
-// GP 26
+// GP 26 - data in for WS2812b: string of 9 WRGB for phone dial
 // GP 27 - IO expander 2 interrupt
 // GP 28 - IO expander 1 interrupt
 //----------------------------------------------------------------------------
@@ -87,6 +87,10 @@ constexpr auto analog_meter_led_format = PicoLed::FORMAT_WGRB;
 static_assert(fader_led_format == analog_meter_led_format);
 constexpr auto fader_and_analog_meter_led_string_length =
     FADER_LED_LENGTH + ANALOG_METER_LED_LENGTH;
+
+#define PHONE_LEDS_DIN_PIN 26
+#define PHONE_LEDS_LENGTH 9
+constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 
 #define DOT_MATRIX_SPI_CHAN PicoSpiNum::PICO_SPI_1
 #define DOT_MATRIX_SPI_SCK 10
@@ -247,8 +251,9 @@ auto calc_frame() -> void {
     } else {
       float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
       auto j = i - ARCADE_BUTTONS_8_LED_LENGTH;
-      float step = 360.f/float(FAN_LED_LENGTH);
-      auto const [r, g, b] = hsv_to_rgb(std::fmod(angle + j * step, 360.f), 1.0, 255);
+      float step = 360.f / float(FAN_LED_LENGTH);
+      auto const [r, g, b] =
+          hsv_to_rgb(std::fmod(angle + j * step, 360.f), 1.0, 255);
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   }
@@ -379,6 +384,9 @@ int main() {
       pio0, 1, FADER_AND_ANALOG_METER_DIN_PIN,
       fader_and_analog_meter_led_string_length, fader_led_format);
 
+  auto phone_leds = PicoLed::addLeds<PicoLed::WS2812B>(
+      pio0, 2, PHONE_LEDS_DIN_PIN, PHONE_LEDS_LENGTH, phone_led_format);
+
   Pico7219 *dot_matrix = pico7219_create(
       DOT_MATRIX_SPI_CHAN, DOT_MATRIX_SPI_BAUDRATE, DOT_MATRIX_SPI_TX,
       DOT_MATRIX_SPI_SCK, DOT_MATRIX_SPI_CS, DOT_MATRIX_CHAIN_LEN, false);
@@ -400,6 +408,11 @@ int main() {
     fader_and_analog_meter_leds.setPixelColor(i, PicoLed::RGBW(0, 0, 0, 128));
   }
   fader_and_analog_meter_leds.show();
+
+  phone_leds.setBrightness(255);
+  phone_leds.clear();
+  phone_leds.fill(PicoLed::RGBW(0, 0, 0, 16));
+  phone_leds.show();
 
   draw_string(dot_matrix, "LUAN", false);
   pico7219_set_intensity(dot_matrix, 0);
