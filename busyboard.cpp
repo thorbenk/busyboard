@@ -245,7 +245,11 @@ auto calc_frame() -> void {
       auto const [r, g, b] = hsv_to_rgb(h, s, v);
       state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     } else {
-      state.grb_led_string[i] = PicoLed::RGB(64, 64, 0);
+      float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
+      auto j = i - ARCADE_BUTTONS_8_LED_LENGTH;
+      float step = 360.f/float(FAN_LED_LENGTH);
+      auto const [r, g, b] = hsv_to_rgb(std::fmod(angle + j * step, 360.f), 1.0, 255);
+      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
     }
   }
 }
