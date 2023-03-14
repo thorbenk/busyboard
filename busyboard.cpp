@@ -105,7 +105,10 @@ constexpr auto fader_and_analog_meter_led_string_length =
 #define FPS 60
 #define MS_PER_FRAME 16
 
-enum class FaderMode { A, B, C };
+enum class FaderMode { RGB, HSV, Effect };
+
+constexpr uint16_t fader_min_max[4][2]{
+    {72, 19813}, {64, 19707}, {121, 19657}, {84, 19787}};
 
 //----------------------------------------------------------------------------
 // globals
@@ -130,8 +133,11 @@ struct State {
   uint8_t buttons_8 = 0;
   uint32_t tick = 0;
   PicoLed::Color grb_led_string[grb_led_string_length];
-  FaderMode fader_mode = FaderMode::A;
+  PicoLed::Color fader_analog_string[fader_and_analog_meter_led_string_length];
+  FaderMode fader_mode = FaderMode::RGB;
   bool toggle_upper_left = false;
+  uint8_t faders[4] = {0, 0, 0, 0};
+  uint8_t fader_adc = 0;
 };
 
 State state;
@@ -149,6 +155,35 @@ void io_expand16_device2_callback(uint gpio, uint32_t events) {
 }
 #endif
 
+auto read_adc() -> void {
+  constexpr ads1115_mux_t channels[4] = {
+      ADS1115_MUX_SINGLE_0, ADS1115_MUX_SINGLE_1, ADS1115_MUX_SINGLE_2,
+      ADS1115_MUX_SINGLE_3};
+
+  uint16_t fader_raw;
+  ads1115_read_adc(&fader_raw, &adc);
+
+  uint16_t const m = fader_min_max[state.fader_adc][0];
+  uint16_t const M = fader_min_max[state.fader_adc][1];
+
+  // clip
+  fader_raw = std::max(m, fader_raw);
+  fader_raw = std::min(M, fader_raw);
+
+  float f = fader_raw / static_cast<float>(M - m);
+  uint8_t f8 = 255 - 255 * f;
+
+  state.faders[state.fader_adc] = f8;
+
+  // setup the ADC for next frame
+  state.fader_adc = state.tick % 4;
+  ads1115_set_operating_mode(ADS1115_MODE_CONTINUOUS, &adc);
+  ads1115_set_input_mux(channels[state.fader_adc], &adc);
+  ads1115_set_pga(ADS1115_PGA_4_096, &adc);
+  ads1115_set_data_rate(ADS1115_RATE_860_SPS, &adc);
+  ads1115_write_config(&adc);
+}
+
 auto calc_frame() -> void {
   auto constexpr duration_sec = 2;
   auto constexpr duration_frames = duration_sec * FPS;
@@ -163,15 +198,24 @@ auto calc_frame() -> void {
   float hue_on = 120.0;
   float hue_off = 0.0;
 
-  if (state.fader_mode == FaderMode::A) {
+  if (state.fader_mode == FaderMode::RGB) {
     hue_on = 120.0;
     hue_off = 0.0;
-  } else if (state.fader_mode == FaderMode::B) {
+    state.fader_analog_string[0] = PicoLed::RGB(128, 0, 0);
+    state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+    state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+  } else if (state.fader_mode == FaderMode::HSV) {
     hue_on = 60.0;
     hue_off = 180.0;
-  } else if (state.fader_mode == FaderMode::C) {
+    state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+    state.fader_analog_string[1] = PicoLed::RGB(0, 128, 0);
+    state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+  } else if (state.fader_mode == FaderMode::Effect) {
     hue_on = 200.0;
     hue_off = 300.0;
+    state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+    state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+    state.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
   }
 
   for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
@@ -191,8 +235,18 @@ auto calc_frame() -> void {
   }
 
   for (int i = ARCADE_BUTTONS_8_LED_LENGTH; i < grb_led_string_length; ++i) {
-    auto const [r, g, b] = hsv_to_rgb(220.0, 1.0, v);
-    state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+    if (state.fader_mode == FaderMode::RGB) {
+      state.grb_led_string[i] =
+          PicoLed::RGB(state.faders[1], state.faders[2], state.faders[3]);
+    } else if (state.fader_mode == FaderMode::HSV) {
+      float h = 360.f * state.faders[1] / 255.0;
+      float s = state.faders[2] / 255.0;
+      float v = state.faders[3];
+      auto const [r, g, b] = hsv_to_rgb(h, s, v);
+      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+    } else {
+      state.grb_led_string[i] = PicoLed::RGB(64, 64, 0);
+    }
   }
 }
 
@@ -310,7 +364,7 @@ int main() {
   ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
   ads1115_set_input_mux(ADS1115_MUX_SINGLE_0, &adc);
   ads1115_set_pga(ADS1115_PGA_4_096, &adc);
-  ads1115_set_data_rate(ADS1115_RATE_128_SPS, &adc);
+  ads1115_set_data_rate(ADS1115_RATE_860_SPS, &adc);
   ads1115_write_config(&adc);
 
   auto arcade_and_fan_leds = PicoLed::addLeds<PicoLed::WS2812B>(
@@ -394,13 +448,13 @@ int main() {
         }
         if (i == 8 && prev == 1 && current == 0) {
           std::cout << "fader push A" << std::endl;
-          state.fader_mode = FaderMode::A;
+          state.fader_mode = FaderMode::RGB;
         } else if (i == 9 && prev == 1 && current == 0) {
           std::cout << "fader push B" << std::endl;
-          state.fader_mode = FaderMode::B;
+          state.fader_mode = FaderMode::HSV;
         } else if (i == 10 && prev == 1 && current == 0) {
           std::cout << "fader push C" << std::endl;
-          state.fader_mode = FaderMode::C;
+          state.fader_mode = FaderMode::Effect;
         } else if (i == 11) {
           state.toggle_upper_left = (current == 1);
         }
@@ -415,12 +469,22 @@ int main() {
 
     if (frame_changed) {
       auto start = time_us_32();
+
+      read_adc();
+
       calc_frame();
       frame_changed = false;
       for (int i = 0; i < grb_led_string_length; ++i) {
         arcade_and_fan_leds.setPixelColor(i, state.grb_led_string[i]);
       }
       arcade_and_fan_leds.show();
+
+      for (int i = 0; i < fader_and_analog_meter_led_string_length; ++i) {
+        fader_and_analog_meter_leds.setPixelColor(i,
+                                                  state.fader_analog_string[i]);
+      }
+      fader_and_analog_meter_leds.show();
+
       if (arcade8_num_changed) {
         std::cout << "update dot matrix" << std::endl;
         char b[4] = {0, 0, 0, 0};
@@ -450,10 +514,11 @@ int main() {
                   << ", max=" << frame_usec_max << " usec" << std::endl;
       }
       if (state.tick % FPS == 0) {
-        uint16_t adc_value;
-        ads1115_read_adc(&adc_value, &adc);
-        // adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
-        std::cout << "ADC: " << adc_value << std::endl;
+        for (int k = 0; k < 4; ++k) {
+          // adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
+          std::cout << "ADC: " << (int)state.faders[k] << " ";
+        }
+        std::cout << std::endl;
       }
     }
   }

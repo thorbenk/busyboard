@@ -30,8 +30,8 @@ target_link_libraries(busyboard
   PicoLed
   pico-ads1115
 )
-pico_add_extra_outputs(busyboard)
-pico_enable_stdio_usb(busyboard 1)
-pico_enable_stdio_uart(busyboard 0)
+#pico_add_extra_outputs(busyboard)
+#pico_enable_stdio_usb(busyboard 1)
+#pico_enable_stdio_uart(busyboard 0)
 
 add_subdirectory(parts)
