@@ -9,11 +9,10 @@ auto read_pcf8575(i2c_inst_t *i2c, uint8_t addr) -> uint16_t {
   int ret;
   uint8_t rxdata[2];
   ret = i2c_read_timeout_us(i2c, addr, rxdata, 2, true, 5 * 1000);
-  // if (ret != 2) {
-  //   std::cerr << "read pcf8575 (0x" << std::hex << (int)addr << ") :
-  //   unexpected return value "
-  //             << std::dec << ret << std::endl;
-  // }
+  if (ret != 2) {
+    std::cerr << "read pcf8575 (0x" << std::hex << (int)addr << ") : "
+              << "unexpected return value " << std::dec << ret << std::endl;
+  }
   return *reinterpret_cast<uint16_t *>(rxdata);
 }
 } // namespace

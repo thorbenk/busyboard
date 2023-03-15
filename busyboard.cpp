@@ -1,4 +1,6 @@
-// #define IO16_DEV2_ENABLED
+#if 1
+
+#define IO16_DEV2_ENABLED
 
 #include "hardware/i2c.h"
 #include "hardware/pwm.h"
@@ -34,6 +36,7 @@ extern "C" {
 // GP  4 - data in for WS2812b: 3 WGRB (fader panel)
 // GP  5
 // GP  6
+// GP  7
 // GP  8 - UART1 TX -> DF Player Mini
 // GP  9 - UART1 TX -> DF Player Mini
 // GP 10 - SPI1 SCK -> Dot matrix CLOCK
@@ -43,11 +46,11 @@ extern "C" {
 // GP 14
 // GP 15
 //
-// GP 16 - data in for WS2812b: string of 8 arcade buttons and 6 LEDs in fan
-// GP 17
+// GP 16 - I2C0 SDA
+// GP 17 - I2C1 SDL
 // GP 18 - phone dial: pulsed number (brown cable)
 // GP 19
-// GP 20
+// GP 20 - data in for WS2812b: string of 8 arcade buttons and 6 LEDs in fan
 // GP 21 - fan PWM signal
 // GP 22 - phone dial: dial in progress (green cable)
 // GP 23
@@ -58,18 +61,25 @@ extern "C" {
 // GP 28 - IO expander 1 interrupt
 //----------------------------------------------------------------------------
 
+#define I2C_0_SDA_PIN 16
+#define I2C_0_SDL_PIN 17
+#define I2C_0_BAUD_RATE 100 * 1000
+
 #define I2C_1_SDA_PIN 2
 #define I2C_1_SDL_PIN 3
 #define I2C_1_BAUD_RATE 100 * 1000
+
 #define IO_EXPAND_16_DEVICE_1_I2C_LANE i2c1
 #define IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN 28
 #define IO_EXPAND_16_DEVICE_1_I2C_ADDRESS 0x20
 #define IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC 2
-#define IO_EXPAND_16_DEVICE_2_I2C_LANE i2c1
+
+#define IO_EXPAND_16_DEVICE_2_I2C_LANE i2c0
 #define IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN 27
-#define IO_EXPAND_16_DEVICE_2_I2C_ADDRESS 0x23
+#define IO_EXPAND_16_DEVICE_2_I2C_ADDRESS 0x21
 #define IO_EXPAND_16_DEVICE_2_DEBOUNCE_MSEC 2
-#define ARCADE_BUTTONS_8_DIN_PIN 16
+
+#define ARCADE_BUTTONS_8_DIN_PIN 20
 #define ARCADE_BUTTONS_8_LED_LENGTH 8
 #define FAN_LED_LENGTH 6
 #define FAN_PWM_PIN 21
@@ -140,6 +150,7 @@ struct ads1115_adc adc;
 
 volatile bool io16_device1_changed = true;
 std::optional<uint16_t> io16_device1_prev_state;
+std::optional<uint16_t> io16_device2_prev_state;
 
 struct State {
   uint8_t buttons_8 = 0;
@@ -149,7 +160,9 @@ struct State {
   PicoLed::Color phone_leds[PHONE_LEDS_LENGTH];
   FaderMode fader_mode = FaderMode::RGB;
   ArcadeMode arcade_mode = ArcadeMode::Binary;
-  bool toggle_upper_left = true; // FIXME
+  bool toggle_upper_left = true;
+  bool double_switch[2] = {false, false};
+  bool double_toggle[2] = {false, false};
   uint8_t faders[4] = {0, 0, 0, 0};
   uint8_t fader_adc = 0;
   bool dial_in_progress = false;
@@ -221,34 +234,40 @@ auto calc_frame() -> void {
   float hue_on = 120.0;
   float hue_off = 0.0;
 
-  if (state.fader_mode == FaderMode::RGB) {
-    hue_on = 120.0;
-    hue_off = 0.0;
-    state.fader_analog_string[0] = PicoLed::RGB(128, 0, 0);
+  //
+  // fader panel LEDs
+  //
+
+  if (state.double_switch[0]) {
+    if (state.fader_mode == FaderMode::RGB) {
+      hue_on = 120.0;
+      hue_off = 0.0;
+      state.fader_analog_string[0] = PicoLed::RGB(128, 0, 0);
+      state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+      state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+    } else if (state.fader_mode == FaderMode::HSV) {
+      hue_on = 60.0;
+      hue_off = 180.0;
+      state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+      state.fader_analog_string[1] = PicoLed::RGB(0, 128, 0);
+      state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+    } else if (state.fader_mode == FaderMode::Effect) {
+      hue_on = 200.0;
+      hue_off = 300.0;
+      state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+      state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+      state.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
+    }
+  } else {
+    state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
     state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
     state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
-  } else if (state.fader_mode == FaderMode::HSV) {
-    hue_on = 60.0;
-    hue_off = 180.0;
-    state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
-    state.fader_analog_string[1] = PicoLed::RGB(0, 128, 0);
-    state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
-  } else if (state.fader_mode == FaderMode::Effect) {
-    hue_on = 200.0;
-    hue_off = 300.0;
-    state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
-    state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
-    state.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
   }
 
   // Fan speed
   // Lowest speed should be 10%
   // The PWM is inverted:
-  uint8_t const fan_pwm =
-      state.faders[0] < 25
-          ? 0
-          : std::max(static_cast<uint8_t>(25), state.faders[0]);
-  std::cout << "FAN " << (int)fan_pwm << std::endl;
+  uint8_t const fan_pwm = std::max(static_cast<uint8_t>(25), state.faders[0]);
   pwm_set_gpio_level(FAN_PWM_PIN, fan_pwm);
 
   //
@@ -274,44 +293,66 @@ auto calc_frame() -> void {
   // fan RGB lights
   //
   for (int i = ARCADE_BUTTONS_8_LED_LENGTH; i < grb_led_string_length; ++i) {
-    if (state.fader_mode == FaderMode::RGB) {
-      state.grb_led_string[i] =
-          PicoLed::RGB(state.faders[1], state.faders[2], state.faders[3]);
-    } else if (state.fader_mode == FaderMode::HSV) {
-      float h = 360.f * state.faders[1] / 255.0;
-      float s = state.faders[2] / 255.0;
-      float v = state.faders[3];
-      auto const [r, g, b] = hsv_to_rgb(h, s, v);
-      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+    if (state.double_switch[0]) {
+      if (state.fader_mode == FaderMode::RGB) {
+        state.grb_led_string[i] =
+            PicoLed::RGB(state.faders[1], state.faders[2], state.faders[3]);
+      } else if (state.fader_mode == FaderMode::HSV) {
+        float h = 360.f * state.faders[1] / 255.0;
+        float s = state.faders[2] / 255.0;
+        float v = state.faders[3];
+        auto const [r, g, b] = hsv_to_rgb(h, s, v);
+        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+      } else {
+        float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
+        auto j = i - ARCADE_BUTTONS_8_LED_LENGTH;
+        float step = 360.f / float(FAN_LED_LENGTH);
+        auto const [r, g, b] =
+            hsv_to_rgb(std::fmod(angle + j * step, 360.f), 1.0, 255);
+        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+      }
     } else {
-      float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
-      auto j = i - ARCADE_BUTTONS_8_LED_LENGTH;
-      float step = 360.f / float(FAN_LED_LENGTH);
-      auto const [r, g, b] =
-          hsv_to_rgb(std::fmod(angle + j * step, 360.f), 1.0, 255);
-      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+      state.grb_led_string[i] = PicoLed::RGB(0, 0, 0);
     }
   }
 
-  if (state.dial_in_progress) {
-    float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
-    float step = 360.f / float(PHONE_LEDS_LENGTH);
-    for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-      auto const [r, g, b] =
-          hsv_to_rgb(std::fmod(angle + i * step, 360.f), 1.0, 255);
-      state.phone_leds[i] = PicoLed::RGB(r, g, b);
+  //
+  // analog meter RGB lights
+  //
+  for (int i = FADER_LED_LENGTH; i < fader_and_analog_meter_led_string_length;
+       ++i) {
+    if (state.double_switch[1]) {
+      state.fader_analog_string[i] = PicoLed::RGBW(0, 0, 0, 64);
+    } else {
+      state.fader_analog_string[i] = PicoLed::RGB(0, 0, 0);
     }
-  } else {
-    if (state.phone_dialed_num >= 0) {
+  }
+
+  if (state.double_toggle[0]) {
+    if (state.dial_in_progress) {
+      float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
+      float step = 360.f / float(PHONE_LEDS_LENGTH);
       for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-        state.phone_leds[i] = i < state.phone_dialed_num
-                                  ? PicoLed::RGB(0, 32, 0)
-                                  : PicoLed::RGB(32, 0, 0);
+        auto const [r, g, b] =
+            hsv_to_rgb(std::fmod(angle + i * step, 360.f), 1.0, 255);
+        state.phone_leds[i] = PicoLed::RGB(r, g, b);
       }
     } else {
-      for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-        state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 32);
+      if (state.phone_dialed_num >= 0) {
+        for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+          state.phone_leds[i] = i < state.phone_dialed_num
+                                    ? PicoLed::RGB(0, 32, 0)
+                                    : PicoLed::RGB(32, 0, 0);
+        }
+      } else {
+        for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+          state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 32);
+        }
       }
+    }
+  } else {
+    for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
+      state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 0);
     }
   }
 }
@@ -396,6 +437,12 @@ void show_text_and_scroll(Pico7219 *pico7219, const char *string) {
 int main() {
   stdio_init_all();
 
+  i2c_init(i2c0, I2C_0_BAUD_RATE);
+  gpio_set_function(I2C_0_SDA_PIN, GPIO_FUNC_I2C);
+  gpio_set_function(I2C_0_SDL_PIN, GPIO_FUNC_I2C);
+  gpio_pull_up(I2C_0_SDA_PIN);
+  gpio_pull_up(I2C_0_SDL_PIN);
+
   i2c_init(i2c1, I2C_1_BAUD_RATE);
   gpio_set_function(I2C_1_SDA_PIN, GPIO_FUNC_I2C);
   gpio_set_function(I2C_1_SDL_PIN, GPIO_FUNC_I2C);
@@ -429,7 +476,7 @@ int main() {
   gpio_pull_up(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN);
   gpio_set_irq_enabled_with_callback(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN,
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-                                     true, &io_expand16_device2_callback);
+                                     true, &gpio_interrupt);
 #endif
 
   gpio_set_function(FAN_PWM_PIN, GPIO_FUNC_PWM);
@@ -507,6 +554,7 @@ int main() {
   int last_display_num = -1;
 
   bool switch6_changed = false;
+  bool toggle_upper_left_changed = false;
 
   while (true) {
     {
@@ -567,8 +615,6 @@ int main() {
           state.fader_mode = FaderMode::HSV;
         } else if (i == 10 && prev == 1 && current == 0) {
           state.fader_mode = FaderMode::Effect;
-          //} else if (i == 11) {
-          //  state.toggle_upper_left = (current == 1);
         } else if (i >= 11 && i < 16) {
           if (current == 0) {
             // wiring mistakes where made
@@ -592,14 +638,49 @@ int main() {
       }
       if (state.switch6 == 0) {
         state.arcade_mode = ArcadeMode::Binary;
+        if (switch6_changed) {
+          state.buttons_8 = 0;
+          state.scroll_dotmatrix = false;
+        }
       } else {
         state.arcade_mode = ArcadeMode::Names;
+        if (switch6_changed) {
+          state.buttons_8 = 1 << 4;
+          state.scroll_dotmatrix = false;
+        }
       }
       io16_device1_prev_state = io16_dev1.state();
     }
 #ifdef IO16_DEV2_ENABLED
     if (io16_dev2.loop()) {
-      std::cout << "io16 dev 2 changed" << std::endl;
+      auto const current_state = io16_dev2.state();
+      std::cout << "io16 dev 2 changed to " << std::bitset<16>(current_state)
+                << std::endl;
+      for (auto i = 0; i < 16; ++i) {
+        bool const current = ((1 << i) & current_state) > 0;
+        bool const prev = io16_device2_prev_state.has_value()
+                              ? (((1 << i) & *io16_device2_prev_state) > 0)
+                              : (!current);
+
+        if (i == 0) {
+          state.toggle_upper_left = (current == 1);
+          if (current != prev) {
+            toggle_upper_left_changed = true;
+          }
+        }
+        if (i == 1 && prev == 1 && current == 0) {
+          state.double_toggle[1] = !state.double_toggle[1];
+        }
+        if (i == 2 && prev == 1 && current == 0) {
+          state.double_toggle[0] = !state.double_toggle[0];
+        }
+        if (i == 3) {
+          state.double_switch[0] = (current == 0);
+        }
+        if (i == 4) {
+          state.double_switch[1] = (current == 0);
+        }
+      }
     }
 #endif
 
@@ -639,75 +720,64 @@ int main() {
       }
       phone_leds.show();
 
-      if (arcade8_num_changed || switch6_changed) {
+      if (arcade8_num_changed || switch6_changed || toggle_upper_left_changed) {
         std::cout << "update dot matrix" << std::endl;
         pico7219_switch_off_all(dot_matrix, false);
-        if (state.arcade_mode == ArcadeMode::Binary) {
-          char b[4] = {0, 0, 0, 0};
-          char b2[4] = {' ', ' ', ' ', 0};
-          itoa(state.buttons_8, b, 10);
-          if (state.buttons_8 >= 100)
-            std::copy(b, b + 3, b2 + 1);
-          else if (state.buttons_8 >= 10)
-            std::copy(b, b + 2, b2 + 2);
-          else
-            std::copy(b, b + 2, b2 + 3);
-          draw_string(dot_matrix, b2, false);
-        } else {
-          state.scroll_dotmatrix = false;
-          if (state.buttons_8 == 1) {
-            draw_string(dot_matrix, "MAMA", false);
-          }
-          if (state.buttons_8 == 2) {
-            draw_string(dot_matrix, "PAPA", false);
-          }
-          if (state.buttons_8 == 4) {
-            state.scroll_dotmatrix = true;
-            show_text_and_scroll(dot_matrix, "JANNIS    ");
-          }
-          if (state.buttons_8 == 8) {
-            draw_string(dot_matrix, "MARA", false);
-          }
-          if (state.buttons_8 == 16) {
-            draw_string(dot_matrix, "LUAN", false);
+        if (state.toggle_upper_left) {
+          if (state.arcade_mode == ArcadeMode::Binary) {
+            char b[4] = {0, 0, 0, 0};
+            char b2[4] = {' ', ' ', ' ', 0};
+            itoa(state.buttons_8, b, 10);
+            if (state.buttons_8 >= 100)
+              std::copy(b, b + 3, b2 + 1);
+            else if (state.buttons_8 >= 10)
+              std::copy(b, b + 2, b2 + 2);
+            else
+              std::copy(b, b + 2, b2 + 3);
+            draw_string(dot_matrix, b2, false);
+          } else {
+            state.scroll_dotmatrix = false;
+            if (state.buttons_8 == 1) {
+              draw_string(dot_matrix, "MAMA", false);
+            }
+            if (state.buttons_8 == 2) {
+              draw_string(dot_matrix, "PAPA", false);
+            }
+            if (state.buttons_8 == 4) {
+              state.scroll_dotmatrix = true;
+              show_text_and_scroll(dot_matrix, "JANNIS    ");
+            }
+            if (state.buttons_8 == 8) {
+              draw_string(dot_matrix, "MARA", false);
+            }
+            if (state.buttons_8 == 16) {
+              draw_string(dot_matrix, "LUAN", false);
+            }
           }
         }
-
         pico7219_flush(dot_matrix);
-
-        arcade8_num_changed = false;
       }
+      arcade8_num_changed = false;
+      switch6_changed = false;
+      toggle_upper_left_changed = false;
+
       auto end = time_us_32();
 
-      switch6_changed = false;
-
-      if (state.tick % FPS == 0) {
-        std::cout << (int)state.switch6 << std::endl;
-      }
-#if 0
+#if 1
       // debug frames per second
       auto dur = end - start;
       frame_usec_max = std::max(frame_usec_max, dur);
       frame_usec_min = std::min(frame_usec_min, dur);
       if (state.tick % FPS == 0) {
-        std::cout << "frame time min=" << frame_usec_min
+        std::cout << "FRAME time min=" << frame_usec_min
                   << ", max=" << frame_usec_max << " usec" << std::endl;
       }
       if (state.tick % FPS == 0) {
         for (int k = 0; k < 4; ++k) {
           // adc_value_f = ads1115_raw_to_volts(adc_value, &adc);
           std::cout << "ADC: " << (int)state.faders[k] << " ";
-
         }
         std::cout << std::endl;
-
-        std::cout << "phone dialing: " << phone_pulse.rising_edge_count_ << ", "
-          << phone_pulse.falling_edge_count_ << std::endl;
-        std::cout << "phone dialing_in_progress: " << phone_dialing_in_progress.rising_edge_count_ << ", "
-          << phone_dialing_in_progress.falling_edge_count_ << std::endl;
-        std::cout << "phone pulse: " << phone_pulse.rising_edge_count_ << ", "
-          << phone_pulse.falling_edge_count_ << std::endl;
-        std::cout << "phone dialed nunm " << (int)state.phone_dialed_num << std::endl;
       }
 #endif
     }
@@ -715,3 +785,93 @@ int main() {
 
   return 0;
 }
+
+#else
+
+/**
+ * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+// Sweep through all 7-bit I2C addresses, to see if any slaves are present on
+// the I2C bus. Print out a table that looks like this:
+//
+// I2C Bus Scan
+//   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+// 0
+// 1       @
+// 2
+// 3             @
+// 4
+// 5
+// 6
+// 7
+//
+// E.g. if slave addresses 0x12 and 0x34 were acknowledged.
+
+#include "hardware/i2c.h"
+#include "pico/binary_info.h"
+#include "pico/stdlib.h"
+#include <stdio.h>
+
+// I2C reserves some addresses for special purposes. We exclude these from the
+// scan. These are any addresses of the form 000 0xxx or 111 1xxx
+bool reserved_addr(uint8_t addr) {
+  return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
+}
+
+#define I2C_PORT i2c0
+#define I2C_SDA_PIN 16
+#define I2C_SCL_PIN 17
+
+int main() {
+  // Enable UART so we can print status output
+  stdio_init_all();
+#if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) ||             \
+    !defined(PICO_DEFAULT_I2C_SCL_PIN)
+#warning i2c/bus_scan example requires a board with I2C pins
+  puts("Default I2C pins were not defined");
+#else
+  // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a
+  // Pico)
+  i2c_init(I2C_PORT, 100 * 1000);
+  gpio_set_function(I2C_SDA_PIN, GPIO_FUNC_I2C);
+  gpio_set_function(I2C_SCL_PIN, GPIO_FUNC_I2C);
+  gpio_pull_up(I2C_SDA_PIN);
+  gpio_pull_up(I2C_SCL_PIN);
+
+  while (true) {
+    printf("\nI2C Bus Scan\n");
+    printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
+
+    for (int addr = 0; addr < (1 << 7); ++addr) {
+      if (addr % 16 == 0) {
+        printf("%02x ", addr);
+      }
+
+      // Perform a 1-byte dummy read from the probe address. If a slave
+      // acknowledges this address, the function returns the number of bytes
+      // transferred. If the address byte is ignored, the function returns
+      // -1.
+
+      // Skip over any reserved addresses.
+      int ret;
+      uint8_t rxdata;
+      if (reserved_addr(addr))
+        ret = PICO_ERROR_GENERIC;
+      else
+        ret = i2c_read_blocking(I2C_PORT, addr, &rxdata, 1, false);
+
+      printf(ret < 0 ? "." : "@");
+      printf(addr % 16 == 15 ? "\n" : "  ");
+    }
+
+    sleep_ms(2000);
+  }
+  printf("Done.\n");
+  return 0;
+#endif
+}
+
+#endif
