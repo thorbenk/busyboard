@@ -1,6 +1,7 @@
 // #define IO16_DEV2_ENABLED
 
 #include "hardware/i2c.h"
+#include "hardware/pwm.h"
 #include "pico/stdlib.h"
 #include <pico/stdlib.h>
 
@@ -47,7 +48,7 @@ extern "C" {
 // GP 18 - phone dial: pulsed number (brown cable)
 // GP 19
 // GP 20
-// GP 21 
+// GP 21 - fan PWM signal
 // GP 22 - phone dial: dial in progress (green cable)
 // GP 23
 // GP 24
@@ -71,6 +72,7 @@ extern "C" {
 #define ARCADE_BUTTONS_8_DIN_PIN 16
 #define ARCADE_BUTTONS_8_LED_LENGTH 8
 #define FAN_LED_LENGTH 6
+#define FAN_PWM_PIN 21
 constexpr auto arcade_buttons_8_led_format = PicoLed::FORMAT_GRB;
 constexpr auto fan_led_format = PicoLed::FORMAT_GRB;
 static_assert(arcade_buttons_8_led_format == fan_led_format);
@@ -238,6 +240,16 @@ auto calc_frame() -> void {
     state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
     state.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
   }
+
+  // Fan speed
+  // Lowest speed should be 10%
+  // The PWM is inverted:
+  uint8_t const fan_pwm =
+      state.faders[0] < 25
+          ? 0
+          : std::max(static_cast<uint8_t>(25), state.faders[0]);
+  std::cout << "FAN " << (int)fan_pwm << std::endl;
+  pwm_set_gpio_level(FAN_PWM_PIN, fan_pwm);
 
   //
   // arcade buttons RGB lights
@@ -420,6 +432,13 @@ int main() {
                                      true, &io_expand16_device2_callback);
 #endif
 
+  gpio_set_function(FAN_PWM_PIN, GPIO_FUNC_PWM);
+  uint const fan_pwm_slice_num = pwm_gpio_to_slice_num(FAN_PWM_PIN);
+  pwm_config fan_pwm_config = pwm_get_default_config();
+  pwm_set_clkdiv(fan_pwm_slice_num, 20.f);
+  pwm_config_set_wrap(&fan_pwm_config, 255);
+  pwm_init(fan_pwm_slice_num, &fan_pwm_config, true);
+
   ads1115_init(ADC_I2C_PORT, ADC_I2C_ADDR, &adc);
   ads1115_set_operating_mode(ADS1115_MODE_SINGLE_SHOT, &adc);
   ads1115_set_input_mux(ADS1115_MUX_SINGLE_0, &adc);
@@ -446,18 +465,11 @@ int main() {
 
   arcade_and_fan_leds.setBrightness(255);
   arcade_and_fan_leds.clear();
-  arcade_and_fan_leds.fill(PicoLed::RGB(0, 0, 64));
+  arcade_and_fan_leds.setPixelColor(0, PicoLed::RGB(64, 0, 0));
   arcade_and_fan_leds.show();
 
   fader_and_analog_meter_leds.setBrightness(255);
   fader_and_analog_meter_leds.clear();
-  fader_and_analog_meter_leds.setPixelColor(0, PicoLed::RGB(64, 0, 0));
-  fader_and_analog_meter_leds.setPixelColor(1, PicoLed::RGB(0, 64, 0));
-  fader_and_analog_meter_leds.setPixelColor(2, PicoLed::RGB(0, 0, 64));
-  for (int i = FADER_LED_LENGTH; i < fader_and_analog_meter_led_string_length;
-       ++i) {
-    fader_and_analog_meter_leds.setPixelColor(i, PicoLed::RGBW(0, 0, 0, 128));
-  }
   fader_and_analog_meter_leds.show();
 
   phone_leds.setBrightness(255);
@@ -493,6 +505,8 @@ int main() {
   int num = -1;
   int display_num = -1;
   int last_display_num = -1;
+
+  bool switch6_changed = false;
 
   while (true) {
     {
@@ -532,7 +546,7 @@ int main() {
 
     if (io16_dev1.loop()) {
       auto const current_state = io16_dev1.state();
-      state.switch6 = 0;
+      int8_t new_switch6 = 0;
       for (auto i = 0; i < 16; ++i) {
         bool const current = ((1 << i) & current_state) > 0;
         bool const prev = io16_device1_prev_state.has_value()
@@ -559,18 +573,22 @@ int main() {
           if (current == 0) {
             // wiring mistakes where made
             if (i == 11 + 3) {
-              state.switch6 = 1;
+              new_switch6 = 1;
             } else if (i == 11 + 4) {
-              state.switch6 = 2;
+              new_switch6 = 2;
             } else if (i == 11 + 0) {
-              state.switch6 = 3;
+              new_switch6 = 3;
             } else if (i == 11 + 1) {
-              state.switch6 = 4;
+              new_switch6 = 4;
             } else if (i == 11 + 2) {
-              state.switch6 = 5;
+              new_switch6 = 5;
             }
           }
         }
+      }
+      if (state.switch6 != new_switch6) {
+        state.switch6 = new_switch6;
+        switch6_changed = true;
       }
       if (state.switch6 == 0) {
         state.arcade_mode = ArcadeMode::Binary;
@@ -621,7 +639,7 @@ int main() {
       }
       phone_leds.show();
 
-      if (arcade8_num_changed) {
+      if (arcade8_num_changed || switch6_changed) {
         std::cout << "update dot matrix" << std::endl;
         pico7219_switch_off_all(dot_matrix, false);
         if (state.arcade_mode == ArcadeMode::Binary) {
@@ -660,6 +678,8 @@ int main() {
         arcade8_num_changed = false;
       }
       auto end = time_us_32();
+
+      switch6_changed = false;
 
       if (state.tick % FPS == 0) {
         std::cout << (int)state.switch6 << std::endl;

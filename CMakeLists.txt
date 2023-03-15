@@ -27,6 +27,7 @@ target_link_libraries(busyboard
   pico_stdlib  
   hardware_i2c
   hardware_spi
+  hardware_pwm
   PicoLed
   pico-ads1115
 )
