@@ -81,13 +81,16 @@ extern "C" {
 
 #define ARCADE_BUTTONS_8_DIN_PIN 20
 #define ARCADE_BUTTONS_8_LED_LENGTH 8
+#define ARCADE_BUTTONS_1_LED_LENGTH 1
 #define FAN_LED_LENGTH 6
 #define FAN_PWM_PIN 21
 constexpr auto arcade_buttons_8_led_format = PicoLed::FORMAT_GRB;
+constexpr auto arcade_buttons_1_led_format = PicoLed::FORMAT_GRB;
 constexpr auto fan_led_format = PicoLed::FORMAT_GRB;
 static_assert(arcade_buttons_8_led_format == fan_led_format);
+static_assert(arcade_buttons_8_led_format == arcade_buttons_1_led_format);
 constexpr auto grb_led_string_length =
-    ARCADE_BUTTONS_8_LED_LENGTH + FAN_LED_LENGTH;
+    ARCADE_BUTTONS_8_LED_LENGTH + ARCADE_BUTTONS_1_LED_LENGTH + FAN_LED_LENGTH;
 
 #define FADER_LED_LENGTH 3
 #define ANALOG_METER_LED_LENGTH 8
@@ -121,6 +124,7 @@ constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 
 #define FPS 60
 #define MS_PER_FRAME 16
+#define ARCADE_1_COLOR_RETAIN_TIME_MS 3000
 
 enum class FaderMode { RGB, HSV, Effect };
 
@@ -163,6 +167,8 @@ struct State {
   bool toggle_upper_left = true;
   bool double_switch[2] = {false, false};
   bool double_toggle[2] = {false, false};
+  bool arcade_1_pressed = false;
+  uint32_t arcade_1_pressed_since_ms = 0;
   uint8_t faders[4] = {0, 0, 0, 0};
   uint8_t fader_adc = 0;
   bool dial_in_progress = false;
@@ -271,7 +277,7 @@ auto calc_frame() -> void {
   pwm_set_gpio_level(FAN_PWM_PIN, fan_pwm);
 
   //
-  // arcade buttons RGB lights
+  // 8 arcade buttons RGB lights
   //
   for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
     float v_arcade = v;
@@ -290,9 +296,40 @@ auto calc_frame() -> void {
   }
 
   //
+  // 1 arcade buttons RGB light
+  // (phone arcade button)
+  //
+
+  PicoLed::Color arcade1_color;
+  if (state.arcade_1_pressed_since_ms > 0) {
+    auto elapsed =
+        to_ms_since_boot(get_absolute_time()) - state.arcade_1_pressed_since_ms;
+    if (elapsed <= ARCADE_1_COLOR_RETAIN_TIME_MS) {
+      arcade1_color = PicoLed::RGB(0, 0, 128);
+    } else {
+      state.arcade_1_pressed_since_ms = 0;
+    }
+  } else {
+    arcade1_color = PicoLed::RGB(0, 128, 0);
+  }
+
+  if (state.double_toggle[0]) {
+    if (state.dial_in_progress) {
+      state.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] =
+          PicoLed::RGB(128, 128, 0); // yellow
+    } else {
+      state.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] = arcade1_color;
+    }
+  } else {
+    state.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] =
+        PicoLed::RGB(0, 0, 0); // off
+  }
+
+  //
   // fan RGB lights
   //
-  for (int i = ARCADE_BUTTONS_8_LED_LENGTH; i < grb_led_string_length; ++i) {
+  for (int i = ARCADE_BUTTONS_8_LED_LENGTH + 1; i < grb_led_string_length;
+       ++i) {
     if (state.double_switch[0]) {
       if (state.fader_mode == FaderMode::RGB) {
         state.grb_led_string[i] =
@@ -558,12 +595,12 @@ int main() {
 
   while (true) {
     {
-      bool const dial_in_progress = !gpio_get(PHONE_DIAL_IN_PROGRESS_PIN);
+      state.dial_in_progress = !gpio_get(PHONE_DIAL_IN_PROGRESS_PIN);
       bool const num_switched = gpio_get(PHONE_DIAL_PULSED_NUMBER);
 
       pulse_time[num_switched] = time_us_32();
 
-      if (dial_in_progress) {
+      if (state.dial_in_progress) {
         if (num == -1) {
           num = 0;
         };
@@ -667,18 +704,18 @@ int main() {
           if (current != prev) {
             toggle_upper_left_changed = true;
           }
-        }
-        if (i == 1 && prev == 1 && current == 0) {
+        } else if (i == 1 && prev == 1 && current == 0) {
           state.double_toggle[1] = !state.double_toggle[1];
-        }
-        if (i == 2 && prev == 1 && current == 0) {
+        } else if (i == 2 && prev == 1 && current == 0) {
           state.double_toggle[0] = !state.double_toggle[0];
-        }
-        if (i == 3) {
+        } else if (i == 3) {
           state.double_switch[0] = (current == 0);
-        }
-        if (i == 4) {
+        } else if (i == 4) {
           state.double_switch[1] = (current == 0);
+        } else if (i == 5 && prev == 1 && current == 0) {
+          state.arcade_1_pressed = true;
+          state.arcade_1_pressed_since_ms =
+              to_ms_since_boot(get_absolute_time());
         }
       }
     }
@@ -761,9 +798,15 @@ int main() {
       switch6_changed = false;
       toggle_upper_left_changed = false;
 
+      if (state.arcade_1_pressed) {
+        std::cout << "ARCADE 1 PRESSED" << std::endl;
+      }
+
+      state.arcade_1_pressed = false;
+
       auto end = time_us_32();
 
-#if 1
+#if 0
       // debug frames per second
       auto dur = end - start;
       frame_usec_max = std::max(frame_usec_max, dur);
@@ -828,7 +871,7 @@ bool reserved_addr(uint8_t addr) {
 int main() {
   // Enable UART so we can print status output
   stdio_init_all();
-#if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) ||             \
+#if !gefined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) ||             \
     !defined(PICO_DEFAULT_I2C_SCL_PIN)
 #warning i2c/bus_scan example requires a board with I2C pins
   puts("Default I2C pins were not defined");
