@@ -13,9 +13,19 @@ include("3rdparty/pico-ads1115/lib/CMakeLists.txt")
 
 add_executable(busyboard 
   busyboard.cpp 
+  debounce.h
   debounce.cpp
+  color.h
   color.cpp
+  sound_game.h
   sound_game.cpp
+  phone.h
+  phone.cpp
+  fan_leds.h
+  fan_leds.cpp
+  modes.h
+  dotmatrix.h 
+  dotmatrix.cpp
   3rdparty/Pico7219/pico7219/src/pico7219.c
   3rdparty/raster-fonts/font-8x8.c
 )

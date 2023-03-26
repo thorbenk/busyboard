@@ -22,6 +22,10 @@ extern "C" {
 #include "color.h"
 #include "debounce.h"
 #include "dfPlayerDriver.h"
+#include "dotmatrix.h"
+#include "fan_leds.h"
+#include "modes.h"
+#include "phone.h"
 #include "sound_game.h"
 
 // hardware ------------------------------------------------------------------
@@ -128,10 +132,6 @@ constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 #define MS_PER_FRAME 16
 #define ARCADE_1_COLOR_RETAIN_TIME_MS 9000
 
-enum class FaderMode { RGB, HSV, Effect };
-
-enum class ArcadeMode { Binary, Names, SoundGame };
-
 constexpr uint16_t fader_min_max[4][2]{
     {72, 19813}, {64, 19707}, {121, 19657}, {84, 19787}};
 
@@ -163,9 +163,6 @@ std::optional<uint16_t> io16_device2_prev_state;
 struct State {
   uint8_t buttons_8 = 0;
   uint32_t tick = 0;
-  PicoLed::Color grb_led_string[grb_led_string_length];
-  PicoLed::Color fader_analog_string[fader_and_analog_meter_led_string_length];
-  PicoLed::Color phone_leds[PHONE_LEDS_LENGTH];
   FaderMode fader_mode = FaderMode::RGB;
   ArcadeMode arcade_mode = ArcadeMode::Binary;
   bool toggle_upper_left = true;
@@ -181,10 +178,20 @@ struct State {
   bool scroll_dotmatrix = false;
 };
 
+struct Leds {
+  PicoLed::Color grb_led_string[grb_led_string_length];
+  PicoLed::Color fader_analog_string[fader_and_analog_meter_led_string_length];
+  PicoLed::Color phone_leds[PHONE_LEDS_LENGTH];
+};
+
 State state;
+std::optional<State> prev_state;
+Leds leds;
 volatile bool frame_changed = true;
 
 SoundGame sound_game;
+Phone phone;
+FanLEDs fan_leds;
 
 //----------------------------------------------------------------------------
 
@@ -238,6 +245,12 @@ auto calc_frame() -> void {
   auto constexpr duration_frames_2 = duration_sec * FPS / 2;
   auto constexpr N = ARCADE_BUTTONS_8_LED_LENGTH;
 
+  if (!prev_state.has_value() || prev_state->fader_mode != state.fader_mode) {
+    fan_leds.set_mode(state.fader_mode);
+  }
+
+  state.phone_dialed_num = phone.dialed_number();
+
   auto f = state.tick % duration_frames;
   if (f > duration_frames_2)
     f = duration_frames - f;
@@ -254,26 +267,26 @@ auto calc_frame() -> void {
     if (state.fader_mode == FaderMode::RGB) {
       hue_on = 120.0;
       hue_off = 0.0;
-      state.fader_analog_string[0] = PicoLed::RGB(128, 0, 0);
-      state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
-      state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[0] = PicoLed::RGB(128, 0, 0);
+      leds.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
     } else if (state.fader_mode == FaderMode::HSV) {
       hue_on = 60.0;
       hue_off = 180.0;
-      state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
-      state.fader_analog_string[1] = PicoLed::RGB(0, 128, 0);
-      state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[1] = PicoLed::RGB(0, 128, 0);
+      leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
     } else if (state.fader_mode == FaderMode::Effect) {
       hue_on = 200.0;
       hue_off = 300.0;
-      state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
-      state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
-      state.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
+      leds.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
     }
   } else {
-    state.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
-    state.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
-    state.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+    leds.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
+    leds.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
+    leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
   }
 
   // Fan speed
@@ -295,15 +308,19 @@ auto calc_frame() -> void {
       if ((1 << i) & state.buttons_8) {
         // button pressed
         auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v_arcade);
-        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+        leds.grb_led_string[i] = PicoLed::RGB(r, g, b);
       } else {
         // button not pressed
         auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v_arcade);
-        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+        leds.grb_led_string[i] = PicoLed::RGB(r, g, b);
       }
     }
   } else if (state.arcade_mode == ArcadeMode::SoundGame) {
-    sound_game.calc_frame(&state.grb_led_string[0]);
+    if (!prev_state.has_value() ||
+        state.toggle_upper_left != prev_state->toggle_upper_left) {
+      sound_game.set_enabled(state.toggle_upper_left);
+    }
+    sound_game.calc_frame(&leds.grb_led_string[0]);
   } else {
     // unimplemented
   }
@@ -328,42 +345,14 @@ auto calc_frame() -> void {
 
   if (state.double_toggle[0]) {
     if (state.dial_in_progress) {
-      state.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] =
+      leds.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] =
           PicoLed::RGB(128, 128, 0); // yellow
     } else {
-      state.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] = arcade1_color;
+      leds.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] = arcade1_color;
     }
   } else {
-    state.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] =
+    leds.grb_led_string[ARCADE_BUTTONS_8_LED_LENGTH] =
         PicoLed::RGB(0, 0, 0); // off
-  }
-
-  //
-  // fan RGB lights
-  //
-  for (int i = ARCADE_BUTTONS_8_LED_LENGTH + 1; i < grb_led_string_length;
-       ++i) {
-    if (state.double_switch[0]) {
-      if (state.fader_mode == FaderMode::RGB) {
-        state.grb_led_string[i] =
-            PicoLed::RGB(state.faders[1], state.faders[2], state.faders[3]);
-      } else if (state.fader_mode == FaderMode::HSV) {
-        float h = 360.f * state.faders[1] / 255.0;
-        float s = state.faders[2] / 255.0;
-        float v = state.faders[3];
-        auto const [r, g, b] = hsv_to_rgb(h, s, v);
-        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
-      } else {
-        float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
-        auto j = i - ARCADE_BUTTONS_8_LED_LENGTH;
-        float step = 360.f / float(FAN_LED_LENGTH);
-        auto const [r, g, b] =
-            hsv_to_rgb(std::fmod(angle + j * step, 360.f), 1.0, 255);
-        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
-      }
-    } else {
-      state.grb_led_string[i] = PicoLed::RGB(0, 0, 0);
-    }
   }
 
   //
@@ -372,39 +361,28 @@ auto calc_frame() -> void {
   for (int i = FADER_LED_LENGTH; i < fader_and_analog_meter_led_string_length;
        ++i) {
     if (state.double_switch[1]) {
-      state.fader_analog_string[i] = PicoLed::RGBW(0, 0, 0, 64);
+      leds.fader_analog_string[i] = PicoLed::RGBW(0, 0, 0, 64);
     } else {
-      state.fader_analog_string[i] = PicoLed::RGB(0, 0, 0);
+      leds.fader_analog_string[i] = PicoLed::RGB(0, 0, 0);
     }
   }
 
-  if (state.double_toggle[0]) {
-    if (state.dial_in_progress) {
-      float angle = 360.f * (state.tick % (2 * FPS)) / float(2 * FPS);
-      float step = 360.f / float(PHONE_LEDS_LENGTH);
-      for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-        auto const [r, g, b] =
-            hsv_to_rgb(std::fmod(angle + i * step, 360.f), 1.0, 255);
-        state.phone_leds[i] = PicoLed::RGB(r, g, b);
-      }
-    } else {
-      if (state.phone_dialed_num >= 0) {
-        for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-          state.phone_leds[i] = i < state.phone_dialed_num
-                                    ? PicoLed::RGB(0, 32, 0)
-                                    : PicoLed::RGB(32, 0, 0);
-        }
-      } else {
-        for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-          state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 32);
-        }
-      }
-    }
-  } else {
-    for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-      state.phone_leds[i] = PicoLed::RGBW(0, 0, 0, 0);
-    }
+  if (!prev_state.has_value() ||
+      prev_state->double_toggle[0] != state.double_toggle[0]) {
+    phone.switch_on(state.double_toggle[0]);
   }
+  phone.calc_frame(leds.phone_leds);
+
+  //
+  // fan RGB lights
+  //
+  if (!prev_state.has_value() ||
+      prev_state->double_switch[0] != state.double_switch[1]) {
+    fan_leds.set_enabled(state.double_switch[0]);
+  }
+  fan_leds.calc_frame(leds.grb_led_string + ARCADE_BUTTONS_8_LED_LENGTH +
+                          ARCADE_BUTTONS_1_LED_LENGTH,
+                      FAN_LED_LENGTH, state.faders);
 }
 
 int64_t on_frame(alarm_id_t id, void *user_data) {
@@ -415,85 +393,32 @@ int64_t on_frame(alarm_id_t id, void *user_data) {
 
 //---------------------------------------------------------------------------
 
-extern uint8_t console_font_8x8[];
-
-// Draw a character to the library. Note that the width of the "virtual
-// display" can be much longer than the physical module chain, and
-// off-display elements can later be scrolled into view. However, it's
-// the job of the application, not the library, to size the virtual
-// display sufficiently to fit all the text in.
-//
-// chr is an offset in the font table, which starts with character 32 (space).
-// It isn't an ASCII character.
-void draw_character(Pico7219 *pico7219, uint8_t chr, int x_offset, BOOL flush) {
-  for (int i = 0; i < 8; i++) // row
-  {
-    // The font elements are one byte wide even though, as its an 8x5 font,
-    //   only the top five bits of each byte are used.
-    uint8_t v = console_font_8x8[8 * chr + i];
-    for (int j = 0; j < 8; j++) // column
-    {
-      int sel = 1 << j;
-      if (sel & v)
-        pico7219_switch_on(pico7219, 7 - i, 7 - j + x_offset, FALSE);
-    }
-  }
-  if (flush)
-    pico7219_flush(pico7219);
-}
-
-// Draw a string of text on the (virtual) display. This function assumes
-// that the library has already been configured to provide a virtual
-// chain of LED modules that is long enough to fit all the text onto.
-void draw_string(Pico7219 *pico7219, const char *s, BOOL flush) {
-  int x = 0;
-  while (*s) {
-    draw_character(pico7219, *s, x, FALSE);
-    s++;
-    x += 8;
-  }
-  if (flush)
-    pico7219_flush(pico7219);
-}
-
-// Get the number of horizontal pixels that a string will take. Since each
-// font element is five pixels wide, and there is one pixel between each
-// character, we just multiply the string length by 6.
-int get_string_length_pixels(const char *s) { return std::strlen(s) * 8; }
-
-// Get the number of 8x8 LED modules that would be needed to accomodate the
-// string of text. That's the number of pixels divided by 8 (the module
-// width), and then one added to round up.
-int get_string_length_modules(const char *s) {
-  return get_string_length_pixels(s) / 8 + 1;
-}
-
-// Show a string of characters, and then scroll it across the display.
-// This function uses pico7219_set_virtual_chain_length() to ensure that
-// there are enough "virtual" modules in the display chain to fit
-// the whole string. It then scrolls it enough times to scroll the
-// whole string right off the end.
-void show_text_and_scroll(Pico7219 *pico7219, const char *string) {
-  pico7219_set_virtual_chain_length(pico7219,
-                                    get_string_length_modules(string));
-  draw_string(pico7219, string, FALSE);
-  pico7219_flush(pico7219);
-
-  int l = get_string_length_pixels(string);
-}
-
 void play_sound(ArcadeSounds sound) {
-  uint8_t* bytes = reinterpret_cast<uint8_t*>(&sound);
+  uint8_t *bytes = reinterpret_cast<uint8_t *>(&sound);
   uint8_t folder = bytes[1];
   uint8_t track = bytes[0];
   uint16_t cmd = (folder << 8) | track;
-  std::cout << "playing arcade sound folder=" << (int)folder << ", track=" << (int)track << std::endl;
+  std::cout << "playing arcade sound folder=" << (int)folder
+            << ", track=" << (int)track << std::endl;
   dfp->sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
 }
 
 void play_sound(uint8_t folder, uint8_t track) {
   uint16_t cmd = (folder << 8) | track;
   dfp->sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+}
+
+void display_number(Pico7219 *dot_matrix, uint8_t number) {
+  char b[4] = {0, 0, 0, 0};
+  char b2[4] = {' ', ' ', ' ', 0};
+  itoa(number, b, 10);
+  if (number >= 100)
+    std::copy(b, b + 3, b2 + 1);
+  else if (state.buttons_8 >= 10)
+    std::copy(b, b + 2, b2 + 2);
+  else
+    std::copy(b, b + 2, b2 + 3);
+  draw_string(dot_matrix, b2, false);
 }
 
 //----------------------------------------------------------------------------
@@ -611,11 +536,9 @@ int main() {
 
   int phone_dialing_prev = 0;
 
-  uint32_t pulse_time[2] = {time_us_32(), time_us_32()};
   bool last_num_switch = false;
   int num = -1;
   int display_num = -1;
-  int last_display_num = -1;
 
   bool switch6_changed = false;
   bool toggle_upper_left_changed = false;
@@ -625,35 +548,7 @@ int main() {
       state.dial_in_progress = !gpio_get(PHONE_DIAL_IN_PROGRESS_PIN);
       bool const num_switched = gpio_get(PHONE_DIAL_PULSED_NUMBER);
 
-      pulse_time[num_switched] = time_us_32();
-
-      if (state.dial_in_progress) {
-        if (num == -1) {
-          num = 0;
-        };
-        uint32_t t1 = pulse_time[0];
-        uint32_t t2 = pulse_time[1];
-        if (t1 > t2) {
-          uint32_t tmp = t1;
-          t1 = t2;
-          t2 = tmp;
-        }
-        if (last_num_switch != num_switched && t2 - t1 > 5 * 1000) {
-          num += 1;
-          last_num_switch = num_switched;
-        }
-      } else {
-        if (display_num != num && num > 0) {
-          num = num / 2;
-          if (num == 10) {
-            num = 0;
-          }
-          display_num = num;
-          num = -1;
-          last_num_switch = false;
-          state.phone_dialed_num = display_num;
-        }
-      }
+      phone.loop(state.dial_in_progress, num_switched);
     }
 
     if (io16_dev1.loop()) {
@@ -768,24 +663,24 @@ int main() {
         pico7219_scroll(dot_matrix, true);
       }
 
-      if (last_display_num != state.phone_dialed_num) {
+      if (prev_state.has_value() &&
+          prev_state->phone_dialed_num != state.phone_dialed_num) {
         play_sound(1, state.phone_dialed_num);
-        last_display_num = state.phone_dialed_num;
       }
 
       for (int i = 0; i < grb_led_string_length; ++i) {
-        arcade_and_fan_leds.setPixelColor(i, state.grb_led_string[i]);
+        arcade_and_fan_leds.setPixelColor(i, leds.grb_led_string[i]);
       }
       arcade_and_fan_leds.show();
 
       for (int i = 0; i < fader_and_analog_meter_led_string_length; ++i) {
         fader_and_analog_meter_leds.setPixelColor(i,
-                                                  state.fader_analog_string[i]);
+                                                  leds.fader_analog_string[i]);
       }
       fader_and_analog_meter_leds.show();
 
       for (int i = 0; i < PHONE_LEDS_LENGTH; ++i) {
-        phone_leds.setPixelColor(i, state.phone_leds[i]);
+        phone_leds.setPixelColor(i, leds.phone_leds[i]);
       }
       phone_leds.show();
 
@@ -794,16 +689,7 @@ int main() {
         pico7219_switch_off_all(dot_matrix, false);
         if (state.toggle_upper_left) {
           if (state.arcade_mode == ArcadeMode::Binary) {
-            char b[4] = {0, 0, 0, 0};
-            char b2[4] = {' ', ' ', ' ', 0};
-            itoa(state.buttons_8, b, 10);
-            if (state.buttons_8 >= 100)
-              std::copy(b, b + 3, b2 + 1);
-            else if (state.buttons_8 >= 10)
-              std::copy(b, b + 2, b2 + 2);
-            else
-              std::copy(b, b + 2, b2 + 3);
-            draw_string(dot_matrix, b2, false);
+            display_number(dot_matrix, state.buttons_8);
           } else if (state.arcade_mode == ArcadeMode::Names) {
             state.scroll_dotmatrix = false;
             if (state.buttons_8 == 1) {
@@ -829,7 +715,7 @@ int main() {
             }
           } else if (state.arcade_mode == ArcadeMode::SoundGame) {
             state.scroll_dotmatrix = false;
-            //if (sound_game.should_play_sound()) {
+            // if (sound_game.should_play_sound()) {
             if (true) {
 
               uint8_t button = 0;
@@ -839,28 +725,12 @@ int main() {
                 }
               }
 
-              std::cout << "ARCADE BUTTON " << (int)button << std::endl;
-
-              uint8_t sound_num = sound_game.permutation(button);
-
-              std::cout << "ARCADE SOUND_NUM " << (int)sound_num << std::endl;
-
-              ArcadeSounds sound;
-              switch (sound_num) {
-                case 0: { sound = ArcadeSounds::transformation__beam_me_up_1; break; }
-                case 1: { sound = ArcadeSounds::transformation__swirl_1; break; }
-                case 2: { sound = ArcadeSounds::blips_and_beeps__bing_1; break; }
-                case 3: { sound = ArcadeSounds::sweeps__down_1; break; }
-                case 4: { sound = ArcadeSounds::sweeps__up_1; break; }
-                case 5: { sound = ArcadeSounds::score_sounds__coins_1; break; }
-                case 6: { sound = ArcadeSounds::score_sounds__score_4; break; }
-                case 7: { sound = ArcadeSounds::noise_and_engine__zapping; break; }
+              if (prev_state.has_value() &&
+                  state.buttons_8 != prev_state->buttons_8) {
+                std::cout << "ARCADE BUTTON " << (int)button << std::endl;
+                auto sound = sound_game.sound_for_button(button);
+                play_sound(sound);
               }
-
-              std::cout << "SOUND = " << std::bitset<16>(static_cast<uint16_t>(sound)) << std::endl;
-
-              play_sound(sound);
-              //play_sound(1, 1);
             }
           }
         }
@@ -896,6 +766,8 @@ int main() {
         std::cout << std::endl;
       }
 #endif
+
+      prev_state = state;
     }
   }
 
