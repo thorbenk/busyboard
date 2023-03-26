@@ -124,7 +124,7 @@ constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 
 #define FPS 60
 #define MS_PER_FRAME 16
-#define ARCADE_1_COLOR_RETAIN_TIME_MS 3000
+#define ARCADE_1_COLOR_RETAIN_TIME_MS 9000
 
 enum class FaderMode { RGB, HSV, Effect };
 
@@ -570,7 +570,7 @@ int main() {
   DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> dfp;
   dfp.reset();
   sleep_ms(2000);
-  dfp.specifyVolume(10);
+  dfp.specifyVolume(15);
   sleep_ms(200);
 
   io16_dev1.init();
@@ -776,19 +776,49 @@ int main() {
             state.scroll_dotmatrix = false;
             if (state.buttons_8 == 1) {
               draw_string(dot_matrix, "MAMA", false);
+              {
+                uint8_t folder = (state.tick % 3) + 2;
+                uint8_t track = static_cast<uint8_t>(1);
+                uint16_t cmd = (folder << 8) | track;
+                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+              }
             }
             if (state.buttons_8 == 2) {
               draw_string(dot_matrix, "PAPA", false);
+              {
+                uint8_t folder = (state.tick % 3) + 2;
+                uint8_t track = static_cast<uint8_t>(2);
+                uint16_t cmd = (folder << 8) | track;
+                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+              }
             }
             if (state.buttons_8 == 4) {
               state.scroll_dotmatrix = true;
               show_text_and_scroll(dot_matrix, "JANNIS    ");
+              {
+                uint8_t folder = (state.tick % 3) + 2;
+                uint8_t track = static_cast<uint8_t>(3);
+                uint16_t cmd = (folder << 8) | track;
+                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+              }
             }
             if (state.buttons_8 == 8) {
               draw_string(dot_matrix, "MARA", false);
+              {
+                uint8_t folder = (state.tick % 3) + 2;
+                uint8_t track = static_cast<uint8_t>(4);
+                uint16_t cmd = (folder << 8) | track;
+                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+              }
             }
             if (state.buttons_8 == 16) {
               draw_string(dot_matrix, "LUAN", false);
+              {
+                uint8_t folder = (state.tick % 3) + 2;
+                uint8_t track = static_cast<uint8_t>(5);
+                uint16_t cmd = (folder << 8) | track;
+                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+              }
             }
           }
         }
@@ -800,6 +830,10 @@ int main() {
 
       if (state.arcade_1_pressed) {
         std::cout << "ARCADE 1 PRESSED" << std::endl;
+        uint8_t folder = 1;
+        uint8_t track = static_cast<uint8_t>(10);
+        uint16_t cmd = (folder << 8) | track;
+        dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
       }
 
       state.arcade_1_pressed = false;
