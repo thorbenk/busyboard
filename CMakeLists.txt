@@ -15,6 +15,7 @@ add_executable(busyboard
   busyboard.cpp 
   debounce.cpp
   color.cpp
+  sound_game.cpp
   3rdparty/Pico7219/pico7219/src/pico7219.c
   3rdparty/raster-fonts/font-8x8.c
 )

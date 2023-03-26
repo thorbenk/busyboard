@@ -15,3 +15,9 @@ make install
 
 sudo cp ~/code/openocd/contrib/60-openocd.rules /etc/udev/rules.d/
 ```
+
+# Sounds
+
+Some of the sounds come from https://dominik-braun.net/retro-sounds/ and are just converted to MP3s
+They are licensed as [Creative Commons license CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+

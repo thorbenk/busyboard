@@ -18,9 +18,11 @@ extern "C" {
 #include "ads1115.h"
 }
 
+#include "arcade_sounds.h"
 #include "color.h"
 #include "debounce.h"
 #include "dfPlayerDriver.h"
+#include "sound_game.h"
 
 // hardware ------------------------------------------------------------------
 // - Raspberry Pi Pico
@@ -128,7 +130,7 @@ constexpr auto phone_led_format = PicoLed::FORMAT_WGRB;
 
 enum class FaderMode { RGB, HSV, Effect };
 
-enum class ArcadeMode { Binary, Names };
+enum class ArcadeMode { Binary, Names, SoundGame };
 
 constexpr uint16_t fader_min_max[4][2]{
     {72, 19813}, {64, 19707}, {121, 19657}, {84, 19787}};
@@ -179,6 +181,8 @@ struct State {
 
 State state;
 volatile bool frame_changed = true;
+
+SoundGame sound_game;
 
 //----------------------------------------------------------------------------
 
@@ -279,20 +283,27 @@ auto calc_frame() -> void {
   //
   // 8 arcade buttons RGB lights
   //
-  for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
-    float v_arcade = v;
-    if (!state.toggle_upper_left)
-      v_arcade = 0.f;
+  if (state.arcade_mode == ArcadeMode::Names ||
+      state.arcade_mode == ArcadeMode::Binary) {
+    for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
+      float v_arcade = v;
+      if (!state.toggle_upper_left)
+        v_arcade = 0.f;
 
-    if ((1 << i) & state.buttons_8) {
-      // button pressed
-      auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v_arcade);
-      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
-    } else {
-      // button not pressed
-      auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v_arcade);
-      state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+      if ((1 << i) & state.buttons_8) {
+        // button pressed
+        auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v_arcade);
+        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+      } else {
+        // button not pressed
+        auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v_arcade);
+        state.grb_led_string[i] = PicoLed::RGB(r, g, b);
+      }
     }
+  } else if (state.arcade_mode == ArcadeMode::SoundGame) {
+    sound_game.calc_frame(&state.grb_led_string[0]);
+  } else {
+    // unimplemented
   }
 
   //
@@ -679,10 +690,16 @@ int main() {
           state.buttons_8 = 0;
           state.scroll_dotmatrix = false;
         }
-      } else {
+      } else if (state.switch6 == 1) {
         state.arcade_mode = ArcadeMode::Names;
         if (switch6_changed) {
           state.buttons_8 = 1 << 4;
+          state.scroll_dotmatrix = false;
+        }
+      } else {
+        state.arcade_mode = ArcadeMode::SoundGame;
+        if (switch6_changed) {
+          state.buttons_8 = 0;
           state.scroll_dotmatrix = false;
         }
       }
