@@ -482,6 +482,15 @@ void show_text_and_scroll(Pico7219 *pico7219, const char *string) {
   int l = get_string_length_pixels(string);
 }
 
+void play_sound(ArcadeSounds sound) {
+  uint8_t* bytes = reinterpret_cast<uint8_t*>(&sound);
+  uint8_t folder = bytes[1];
+  uint8_t track = bytes[0];
+  uint16_t cmd = (folder << 8) | track;
+  std::cout << "playing arcade sound folder=" << (int)folder << ", track=" << (int)track << std::endl;
+  dfp->sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+}
+
 void play_sound(uint8_t folder, uint8_t track) {
   uint16_t cmd = (folder << 8) | track;
   dfp->sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
@@ -820,39 +829,38 @@ int main() {
             }
           } else if (state.arcade_mode == ArcadeMode::SoundGame) {
             state.scroll_dotmatrix = false;
-            if (sound_game.should_play_sound()) {
-              if (state.buttons_8 == 1) {
-                std::cout << "buttons game 1" << std::endl;
-                play_sound(1, sound_game.permutation(0));
+            //if (sound_game.should_play_sound()) {
+            if (true) {
+
+              uint8_t button = 0;
+              for (int i = 0; i < 8; ++i) {
+                if (((1 << i) & state.buttons_8) > 0) {
+                  button = i;
+                }
               }
-              if (state.buttons_8 == 2) {
-                std::cout << "buttons game 2" << std::endl;
-                play_sound(1, sound_game.permutation(1));
+
+              std::cout << "ARCADE BUTTON " << (int)button << std::endl;
+
+              uint8_t sound_num = sound_game.permutation(button);
+
+              std::cout << "ARCADE SOUND_NUM " << (int)sound_num << std::endl;
+
+              ArcadeSounds sound;
+              switch (sound_num) {
+                case 0: { sound = ArcadeSounds::transformation__beam_me_up_1; break; }
+                case 1: { sound = ArcadeSounds::transformation__swirl_1; break; }
+                case 2: { sound = ArcadeSounds::blips_and_beeps__bing_1; break; }
+                case 3: { sound = ArcadeSounds::sweeps__down_1; break; }
+                case 4: { sound = ArcadeSounds::sweeps__up_1; break; }
+                case 5: { sound = ArcadeSounds::score_sounds__coins_1; break; }
+                case 6: { sound = ArcadeSounds::score_sounds__score_4; break; }
+                case 7: { sound = ArcadeSounds::noise_and_engine__zapping; break; }
               }
-              if (state.buttons_8 == 4) {
-                std::cout << "buttons game 4" << std::endl;
-                play_sound(1, sound_game.permutation(2));
-              }
-              if (state.buttons_8 == 8) {
-                std::cout << "buttons game 8" << std::endl;
-                play_sound(1, sound_game.permutation(3));
-              }
-              if (state.buttons_8 == 16) {
-                std::cout << "buttons game 16" << std::endl;
-                play_sound(1, sound_game.permutation(4));
-              }
-              if (state.buttons_8 == 32) {
-                std::cout << "buttons game 32" << std::endl;
-                play_sound(1, sound_game.permutation(5));
-              }
-              if (state.buttons_8 == 64) {
-                std::cout << "buttons game 64" << std::endl;
-                play_sound(1, sound_game.permutation(6));
-              }
-              if (state.buttons_8 == 128) {
-                std::cout << "buttons game 128" << std::endl;
-                play_sound(1, sound_game.permutation(7));
-              }
+
+              std::cout << "SOUND = " << std::bitset<16>(static_cast<uint16_t>(sound)) << std::endl;
+
+              play_sound(sound);
+              //play_sound(1, 1);
             }
           }
         }

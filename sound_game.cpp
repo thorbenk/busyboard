@@ -3,15 +3,16 @@
 #include "color.h"
 
 #include <algorithm>
+#include <numeric>
 #include <iostream>
 
 #define FADE_IN_FRAMES 120
 #define FADE_OUT_FRAMES 120
-#define CONSTANT_FRAMES 5 * 60
-#define COLOR_CHANGE_FRAMES 5 * 60
+#define CONSTANT_FRAMES 15 * 60
+#define COLOR_CHANGE_FRAMES 2 * 60
 #define COLOR_CHANGE_IN 20
 #define COLOR_CHANGE_OUT 20
-#define COLOR_CHANGE_CHANGE 15
+#define COLOR_CHANGE_CHANGE 10
 
 SoundGame::SoundGame() {
   for (int i = 0; i < 8; ++i) {
@@ -31,14 +32,17 @@ void SoundGame::next_frame() {
   frame_++;
 
   if (state_ == State::FadeIn && frame_ >= FADE_IN_FRAMES) {
+    // reset to same permutation for now
+    //std::iota(permutation_.begin(), permutation_.end(), 0);
     state_ = State::Constant;
     frame_ = 0;
   } else if (state_ == State::Constant && frame_ >= CONSTANT_FRAMES) {
     state_ = State::FadeOut;
     frame_ = 0;
   } else if (state_ == State::FadeOut && frame_ >= FADE_OUT_FRAMES) {
-    state_ = State::ColorChange;
-    std::random_shuffle(permutation_.begin(), permutation_.end());
+    //state_ = State::ColorChange;
+    //std::random_shuffle(permutation_.begin(), permutation_.end());
+    state_ = State::FadeIn;
     frame_ = 0;
   } else if (state_ == State::ColorChange && frame_ >= COLOR_CHANGE_FRAMES) {
     state_ = State::FadeIn;
