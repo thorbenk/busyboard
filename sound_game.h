@@ -11,6 +11,11 @@ public:
 
   void calc_frame(PicoLed::Color *strip_begin);
 
+  // button in [0, 8)
+  uint8_t permutation(uint8_t button);
+
+  bool should_play_sound();
+
 private:
   void next_frame();
 

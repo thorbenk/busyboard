@@ -795,7 +795,7 @@ int main() {
             else
               std::copy(b, b + 2, b2 + 3);
             draw_string(dot_matrix, b2, false);
-          } else {
+          } else if (state.arcade_mode == ArcadeMode::Names) {
             state.scroll_dotmatrix = false;
             if (state.buttons_8 == 1) {
               draw_string(dot_matrix, "MAMA", false);
@@ -817,6 +817,42 @@ int main() {
             if (state.buttons_8 == 16) {
               draw_string(dot_matrix, "LUAN", false);
               play_sound((state.tick % 3) + 2, 5);
+            }
+          } else if (state.arcade_mode == ArcadeMode::SoundGame) {
+            state.scroll_dotmatrix = false;
+            if (sound_game.should_play_sound()) {
+              if (state.buttons_8 == 1) {
+                std::cout << "buttons game 1" << std::endl;
+                play_sound(1, sound_game.permutation(0));
+              }
+              if (state.buttons_8 == 2) {
+                std::cout << "buttons game 2" << std::endl;
+                play_sound(1, sound_game.permutation(1));
+              }
+              if (state.buttons_8 == 4) {
+                std::cout << "buttons game 4" << std::endl;
+                play_sound(1, sound_game.permutation(2));
+              }
+              if (state.buttons_8 == 8) {
+                std::cout << "buttons game 8" << std::endl;
+                play_sound(1, sound_game.permutation(3));
+              }
+              if (state.buttons_8 == 16) {
+                std::cout << "buttons game 16" << std::endl;
+                play_sound(1, sound_game.permutation(4));
+              }
+              if (state.buttons_8 == 32) {
+                std::cout << "buttons game 32" << std::endl;
+                play_sound(1, sound_game.permutation(5));
+              }
+              if (state.buttons_8 == 64) {
+                std::cout << "buttons game 64" << std::endl;
+                play_sound(1, sound_game.permutation(6));
+              }
+              if (state.buttons_8 == 128) {
+                std::cout << "buttons game 128" << std::endl;
+                play_sound(1, sound_game.permutation(7));
+              }
             }
           }
         }

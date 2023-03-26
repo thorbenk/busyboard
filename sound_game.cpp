@@ -19,6 +19,14 @@ SoundGame::SoundGame() {
   }
 }
 
+uint8_t SoundGame::permutation(uint8_t button) {
+  return permutation_[button];
+}
+
+bool SoundGame::should_play_sound() {
+  return state_ == State::Constant;
+}
+
 void SoundGame::next_frame() {
   frame_++;
 
