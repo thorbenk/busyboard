@@ -139,6 +139,8 @@ constexpr uint16_t fader_min_max[4][2]{
 // globals
 //----------------------------------------------------------------------------
 
+DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> *dfp = nullptr;
+
 Debounce_PCF8575 io16_dev1(IO_EXPAND_16_DEVICE_1_I2C_LANE,
                            IO_EXPAND_16_DEVICE_1_I2C_ADDRESS,
                            IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC);
@@ -480,6 +482,11 @@ void show_text_and_scroll(Pico7219 *pico7219, const char *string) {
   int l = get_string_length_pixels(string);
 }
 
+void play_sound(uint8_t folder, uint8_t track) {
+  uint16_t cmd = (folder << 8) | track;
+  dfp->sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+}
+
 //----------------------------------------------------------------------------
 
 int main() {
@@ -578,10 +585,10 @@ int main() {
   uint32_t frame_usec_min = 0;
   uint32_t frame_usec_max = 0;
 
-  DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX> dfp;
-  dfp.reset();
+  dfp = new DfPlayerPico<DFPLAYER_UART, DFPLAYER_MINI_TX, DFPLAYER_MINI_RX>();
+  dfp->reset();
   sleep_ms(2000);
-  dfp.specifyVolume(15);
+  dfp->specifyVolume(15);
   sleep_ms(200);
 
   io16_dev1.init();
@@ -653,7 +660,9 @@ int main() {
           // this means the button was pressed down.
           if (state.arcade_mode == ArcadeMode::Binary) {
             state.buttons_8 ^= (1 << i);
-          } else {
+          } else if (state.arcade_mode == ArcadeMode::Names) {
+            state.buttons_8 = (1 << i);
+          } else if (state.arcade_mode == ArcadeMode::SoundGame) {
             state.buttons_8 = (1 << i);
           }
         }
@@ -751,10 +760,7 @@ int main() {
       }
 
       if (last_display_num != state.phone_dialed_num) {
-        uint8_t folder = 1;
-        uint8_t track = static_cast<uint8_t>(state.phone_dialed_num);
-        uint16_t cmd = (folder << 8) | state.phone_dialed_num;
-        dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+        play_sound(1, state.phone_dialed_num);
         last_display_num = state.phone_dialed_num;
       }
 
@@ -793,49 +799,24 @@ int main() {
             state.scroll_dotmatrix = false;
             if (state.buttons_8 == 1) {
               draw_string(dot_matrix, "MAMA", false);
-              {
-                uint8_t folder = (state.tick % 3) + 2;
-                uint8_t track = static_cast<uint8_t>(1);
-                uint16_t cmd = (folder << 8) | track;
-                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
-              }
+              play_sound((state.tick % 3) + 2, 1);
             }
             if (state.buttons_8 == 2) {
               draw_string(dot_matrix, "PAPA", false);
-              {
-                uint8_t folder = (state.tick % 3) + 2;
-                uint8_t track = static_cast<uint8_t>(2);
-                uint16_t cmd = (folder << 8) | track;
-                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
-              }
+              play_sound((state.tick % 3) + 2, 2);
             }
             if (state.buttons_8 == 4) {
               state.scroll_dotmatrix = true;
               show_text_and_scroll(dot_matrix, "JANNIS    ");
-              {
-                uint8_t folder = (state.tick % 3) + 2;
-                uint8_t track = static_cast<uint8_t>(3);
-                uint16_t cmd = (folder << 8) | track;
-                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
-              }
+              play_sound((state.tick % 3) + 2, 3);
             }
             if (state.buttons_8 == 8) {
               draw_string(dot_matrix, "MARA", false);
-              {
-                uint8_t folder = (state.tick % 3) + 2;
-                uint8_t track = static_cast<uint8_t>(4);
-                uint16_t cmd = (folder << 8) | track;
-                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
-              }
+              play_sound((state.tick % 3) + 2, 4);
             }
             if (state.buttons_8 == 16) {
               draw_string(dot_matrix, "LUAN", false);
-              {
-                uint8_t folder = (state.tick % 3) + 2;
-                uint8_t track = static_cast<uint8_t>(5);
-                uint16_t cmd = (folder << 8) | track;
-                dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
-              }
+              play_sound((state.tick % 3) + 2, 5);
             }
           }
         }
@@ -847,10 +828,7 @@ int main() {
 
       if (state.arcade_1_pressed) {
         std::cout << "ARCADE 1 PRESSED" << std::endl;
-        uint8_t folder = 1;
-        uint8_t track = static_cast<uint8_t>(10);
-        uint16_t cmd = (folder << 8) | track;
-        dfp.sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
+        play_sound(1, 10);
       }
 
       state.arcade_1_pressed = false;
