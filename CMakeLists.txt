@@ -28,6 +28,8 @@ add_executable(busyboard
   dotmatrix.cpp
   gamma8.h
   gamma8.cpp
+  arcade_buttons.h
+  arcade_buttons.cpp
   3rdparty/Pico7219/pico7219/src/pico7219.c
   3rdparty/raster-fonts/font-8x8.c
 )

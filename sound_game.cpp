@@ -1,6 +1,7 @@
 #include "sound_game.h"
 
 #include "color.h"
+#include "gamma8.h"
 
 #include <algorithm>
 #include <iostream>
@@ -65,11 +66,13 @@ void SoundGame::calc_frame(PicoLed::Color *strip_begin) {
   if (state_ == State::Off) {
     v = 0;
   } else if (state_ == State::FadeIn) {
-    v = 128 * static_cast<float>(frame_) / FADE_IN_FRAMES;
+    v = gamma8[64 + static_cast<uint8_t>(64 * static_cast<float>(frame_) /
+                                         FADE_IN_FRAMES)];
   } else if (state_ == State::Constant) {
-    v = 128;
+    v = gamma8[128];
   } else if (state_ == State::FadeOut) {
-    v = 128 - 128 * static_cast<float>(frame_) / FADE_OUT_FRAMES;
+    v = gamma8[64 + static_cast<uint8_t>(64 - 64 * static_cast<float>(frame_) /
+                                                  FADE_OUT_FRAMES)];
   } else if (state_ == State::ColorChange) {
     if (frame_ < COLOR_CHANGE_IN) {
       v = 0;

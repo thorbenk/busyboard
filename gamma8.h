@@ -2,4 +2,4 @@
 
 #include <cstdint>
 
-uint8_t const gamma8[256];
+extern uint8_t gamma8[];

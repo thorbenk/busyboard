@@ -14,6 +14,7 @@ extern "C" {
 #include "ads1115.h"
 }
 
+#include "arcade_buttons.h"
 #include "arcade_sounds.h"
 #include "color.h"
 #include "debounce.h"
@@ -186,6 +187,7 @@ volatile bool frame_changed = true;
 SoundGame sound_game;
 Phone phone;
 FanLEDs fan_leds;
+ArcadeButtons buttons8;
 
 //----------------------------------------------------------------------------
 
@@ -231,24 +233,16 @@ auto read_adc() -> void {
 }
 
 auto calc_frame() -> void {
-  auto constexpr duration_sec = 2;
-  auto constexpr duration_frames = duration_sec * FPS;
-  auto constexpr duration_frames_2 = duration_sec * FPS / 2;
-  auto constexpr N = ARCADE_BUTTONS_8_LED_LENGTH;
-
   if (!prev_state.has_value() || prev_state->fader_mode != state.fader_mode) {
     fan_leds.set_mode(state.fader_mode);
   }
+  if (!prev_state.has_value() ||
+      prev_state->toggle_upper_left != state.toggle_upper_left ||
+      prev_state->arcade_mode != state.arcade_mode) {
+    buttons8.set_enabled(state.toggle_upper_left);
+  }
 
   state.phone_dialed_num = phone.dialed_number();
-
-  auto f = state.tick % duration_frames;
-  if (f > duration_frames_2)
-    f = duration_frames - f;
-  uint8_t v = 32 + 128 * (f / static_cast<float>(duration_frames_2));
-
-  float hue_on = 120.0;
-  float hue_off = 0.0;
 
   //
   // fader panel LEDs
@@ -256,23 +250,20 @@ auto calc_frame() -> void {
 
   if (state.double_switch[0]) {
     if (state.fader_mode == FaderMode::RGB) {
-      hue_on = 120.0;
-      hue_off = 0.0;
       leds.fader_analog_string[0] = PicoLed::RGB(128, 0, 0);
       leds.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
       leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+      buttons8.set_hues(120.f, 0.f);
     } else if (state.fader_mode == FaderMode::HSV) {
-      hue_on = 60.0;
-      hue_off = 180.0;
       leds.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
       leds.fader_analog_string[1] = PicoLed::RGB(0, 128, 0);
       leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 0);
+      buttons8.set_hues(60.f, 180.f);
     } else if (state.fader_mode == FaderMode::Effect) {
-      hue_on = 200.0;
-      hue_off = 300.0;
       leds.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
       leds.fader_analog_string[1] = PicoLed::RGB(0, 0, 0);
       leds.fader_analog_string[2] = PicoLed::RGB(0, 0, 128);
+      buttons8.set_hues(200.f, 300.f);
     }
   } else {
     leds.fader_analog_string[0] = PicoLed::RGB(0, 0, 0);
@@ -291,21 +282,7 @@ auto calc_frame() -> void {
   //
   if (state.arcade_mode == ArcadeMode::Names ||
       state.arcade_mode == ArcadeMode::Binary) {
-    for (int i = 0; i < ARCADE_BUTTONS_8_LED_LENGTH; ++i) {
-      float v_arcade = v;
-      if (!state.toggle_upper_left)
-        v_arcade = 0.f;
-
-      if ((1 << i) & state.buttons_8) {
-        // button pressed
-        auto const [r, g, b] = hsv_to_rgb(hue_on, 1.0, v_arcade);
-        leds.grb_led_string[i] = PicoLed::RGB(r, g, b);
-      } else {
-        // button not pressed
-        auto const [r, g, b] = hsv_to_rgb(hue_off, 1.0, v_arcade);
-        leds.grb_led_string[i] = PicoLed::RGB(r, g, b);
-      }
-    }
+    buttons8.calc_frame(state.tick, state.buttons_8, leds.grb_led_string);
   } else if (state.arcade_mode == ArcadeMode::SoundGame) {
     if (!prev_state.has_value() ||
         state.toggle_upper_left != prev_state->toggle_upper_left) {
