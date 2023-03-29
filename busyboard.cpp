@@ -1,7 +1,3 @@
-#if 1
-
-#define IO16_DEV2_ENABLED
-
 #include "hardware/i2c.h"
 #include "hardware/pwm.h"
 #include "pico/stdlib.h"
@@ -145,11 +141,9 @@ Debounce_PCF8575 io16_dev1(IO_EXPAND_16_DEVICE_1_I2C_LANE,
                            IO_EXPAND_16_DEVICE_1_I2C_ADDRESS,
                            IO_EXPAND_16_DEVICE_1_DEBOUNCE_MSEC);
 
-#ifdef IO16_DEV2_ENABLED
 Debounce_PCF8575 io16_dev2(IO_EXPAND_16_DEVICE_2_I2C_LANE,
                            IO_EXPAND_16_DEVICE_2_I2C_ADDRESS,
                            IO_EXPAND_16_DEVICE_2_DEBOUNCE_MSEC);
-#endif
 
 // DebounceEdge phone_pulse(5);
 DebounceEdge phone_dialing_in_progress(50);
@@ -202,12 +196,9 @@ void gpio_interrupt(uint gpio, uint32_t events) {
     phone_dialing_in_progress.on_event(events);
   } else if (gpio == IO_EXPAND_16_DEVICE_1_INTERRUPT_PIN) {
     io16_dev1.on_pcf8575_interrupt();
-  }
-#ifdef IO16_DEV2_ENABLED
-  else if (gpio == IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN) {
+  } else if (gpio == IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN) {
     io16_dev2.on_pcf8575_interrupt();
   }
-#endif
 }
 
 auto read_adc() -> void {
@@ -398,8 +389,6 @@ void play_sound(ArcadeSounds sound) {
   uint8_t folder = bytes[1];
   uint8_t track = bytes[0];
   uint16_t cmd = (folder << 8) | track;
-  std::cout << "playing arcade sound folder=" << (int)folder
-            << ", track=" << (int)track << std::endl;
   dfp->sendCmd(dfPlayer::SPECIFY_FOLDER_PLAYBACK, cmd);
 }
 
@@ -459,14 +448,12 @@ int main() {
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
                                      true, &gpio_interrupt);
 
-#ifdef IO16_DEV2_ENABLED
   gpio_init(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN);
   gpio_set_dir(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN, GPIO_IN);
   gpio_pull_up(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN);
   gpio_set_irq_enabled_with_callback(IO_EXPAND_16_DEVICE_2_INTERRUPT_PIN,
                                      GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
                                      true, &gpio_interrupt);
-#endif
 
   gpio_set_function(FAN_PWM_PIN, GPIO_FUNC_PWM);
   uint const fan_pwm_slice_num = pwm_gpio_to_slice_num(FAN_PWM_PIN);
@@ -526,9 +513,7 @@ int main() {
   sleep_ms(200);
 
   io16_dev1.init();
-#ifdef IO16_DEV2_ENABLED
   io16_dev2.init();
-#endif
 
   bool arcade8_num_changed = false;
 
@@ -618,7 +603,6 @@ int main() {
       }
       io16_device1_prev_state = io16_dev1.state();
     }
-#ifdef IO16_DEV2_ENABLED
     if (io16_dev2.loop()) {
       auto const current_state = io16_dev2.state();
       std::cout << "io16 dev 2 changed to " << std::bitset<16>(current_state)
@@ -649,10 +633,11 @@ int main() {
         }
       }
     }
-#endif
 
     if (frame_changed) {
+#ifdef DEBUG_TIMING
       auto start = time_us_32();
+#endif
 
       read_adc();
 
@@ -730,6 +715,7 @@ int main() {
                 std::cout << "ARCADE BUTTON " << (int)button << std::endl;
                 auto sound = sound_game.sound_for_button(button);
                 play_sound(sound);
+                state.buttons_8 = 0;
               }
             }
           }
@@ -747,9 +733,9 @@ int main() {
 
       state.arcade_1_pressed = false;
 
+#ifdef DEBUG_TIMING
       auto end = time_us_32();
 
-#if 0
       // debug frames per second
       auto dur = end - start;
       frame_usec_max = std::max(frame_usec_max, dur);
@@ -773,93 +759,3 @@ int main() {
 
   return 0;
 }
-
-#else
-
-/**
- * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- */
-
-// Sweep through all 7-bit I2C addresses, to see if any slaves are present on
-// the I2C bus. Print out a table that looks like this:
-//
-// I2C Bus Scan
-//   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0
-// 1       @
-// 2
-// 3             @
-// 4
-// 5
-// 6
-// 7
-//
-// E.g. if slave addresses 0x12 and 0x34 were acknowledged.
-
-#include "hardware/i2c.h"
-#include "pico/binary_info.h"
-#include "pico/stdlib.h"
-#include <stdio.h>
-
-// I2C reserves some addresses for special purposes. We exclude these from the
-// scan. These are any addresses of the form 000 0xxx or 111 1xxx
-bool reserved_addr(uint8_t addr) {
-  return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
-}
-
-#define I2C_PORT i2c0
-#define I2C_SDA_PIN 16
-#define I2C_SCL_PIN 17
-
-int main() {
-  // Enable UART so we can print status output
-  stdio_init_all();
-#if !gefined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) ||             \
-    !defined(PICO_DEFAULT_I2C_SCL_PIN)
-#warning i2c/bus_scan example requires a board with I2C pins
-  puts("Default I2C pins were not defined");
-#else
-  // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a
-  // Pico)
-  i2c_init(I2C_PORT, 100 * 1000);
-  gpio_set_function(I2C_SDA_PIN, GPIO_FUNC_I2C);
-  gpio_set_function(I2C_SCL_PIN, GPIO_FUNC_I2C);
-  gpio_pull_up(I2C_SDA_PIN);
-  gpio_pull_up(I2C_SCL_PIN);
-
-  while (true) {
-    printf("\nI2C Bus Scan\n");
-    printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
-
-    for (int addr = 0; addr < (1 << 7); ++addr) {
-      if (addr % 16 == 0) {
-        printf("%02x ", addr);
-      }
-
-      // Perform a 1-byte dummy read from the probe address. If a slave
-      // acknowledges this address, the function returns the number of bytes
-      // transferred. If the address byte is ignored, the function returns
-      // -1.
-
-      // Skip over any reserved addresses.
-      int ret;
-      uint8_t rxdata;
-      if (reserved_addr(addr))
-        ret = PICO_ERROR_GENERIC;
-      else
-        ret = i2c_read_blocking(I2C_PORT, addr, &rxdata, 1, false);
-
-      printf(ret < 0 ? "." : "@");
-      printf(addr % 16 == 15 ? "\n" : "  ");
-    }
-
-    sleep_ms(2000);
-  }
-  printf("Done.\n");
-  return 0;
-#endif
-}
-
-#endif

@@ -26,6 +26,8 @@ add_executable(busyboard
   modes.h
   dotmatrix.h 
   dotmatrix.cpp
+  gamma8.h
+  gamma8.cpp
   3rdparty/Pico7219/pico7219/src/pico7219.c
   3rdparty/raster-fonts/font-8x8.c
 )
