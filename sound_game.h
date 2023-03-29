@@ -11,7 +11,8 @@ public:
 
   SoundGame();
 
-  void calc_frame(PicoLed::Color *strip_begin);
+  void calc_frame(uint32_t frame, PicoLed::Color *strip_begin,
+                  uint8_t buttons8);
 
   void set_enabled(bool);
 
@@ -23,11 +24,13 @@ public:
   ArcadeSounds sound_for_button(uint8_t button);
 
 private:
-  void next_frame();
+  void next_frame(uint32_t frame);
 
   bool enabled_ = false;
   uint16_t hues_[8];
   State state_ = State::Off;
-  uint32_t frame_ = 0;
+  uint32_t state_frame_start_ = 0;
   std::array<uint8_t, 8> permutation_ = {0, 1, 2, 3, 4, 5, 6, 7};
+  int8_t pressed_button_ = -1;
+  uint32_t pressed_button_frame_ = 0;
 };

@@ -288,7 +288,7 @@ auto calc_frame() -> void {
         state.toggle_upper_left != prev_state->toggle_upper_left) {
       sound_game.set_enabled(state.toggle_upper_left);
     }
-    sound_game.calc_frame(&leds.grb_led_string[0]);
+    sound_game.calc_frame(state.tick, &leds.grb_led_string[0], state.buttons_8);
   } else {
     // unimplemented
   }

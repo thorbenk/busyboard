@@ -4,7 +4,6 @@
 #include "gamma8.h"
 
 #include <algorithm>
-#include <iostream>
 #include <numeric>
 
 #define FADE_IN_FRAMES 120
@@ -14,6 +13,7 @@
 #define COLOR_CHANGE_IN 20
 #define COLOR_CHANGE_OUT 20
 #define COLOR_CHANGE_CHANGE 10
+#define PRESSED_HIGHLIGHT_TIME 60
 
 SoundGame::SoundGame() {
   for (int i = 0; i < 8; ++i) {
@@ -27,72 +27,88 @@ bool SoundGame::should_play_sound() { return state_ == State::Constant; }
 
 void SoundGame::set_enabled(bool enabled) {
   enabled_ = enabled;
-  frame_ = 0;
+  state_frame_start_ = 0;
   if (enabled)
     state_ = State::FadeIn;
   else
     state_ = State::FadeOut;
 }
 
-void SoundGame::next_frame() {
-  frame_++;
-
-  if (state_ == State::FadeIn && frame_ >= FADE_IN_FRAMES) {
+void SoundGame::next_frame(uint32_t frame) {
+  if (state_ == State::FadeIn && frame - state_frame_start_ >= FADE_IN_FRAMES) {
     // reset to same permutation for now
     // std::iota(permutation_.begin(), permutation_.end(), 0);
     state_ = State::Constant;
-    frame_ = 0;
-  } else if (state_ == State::Constant && frame_ >= CONSTANT_FRAMES) {
+    state_frame_start_ = frame;
+  } else if (state_ == State::Constant &&
+             frame - state_frame_start_ >= CONSTANT_FRAMES) {
     state_ = State::FadeOut;
-    frame_ = 0;
-  } else if (state_ == State::FadeOut && frame_ >= FADE_OUT_FRAMES) {
+    state_frame_start_ = frame;
+  } else if (state_ == State::FadeOut &&
+             frame - state_frame_start_ >= FADE_OUT_FRAMES) {
     // state_ = State::ColorChange;
     // std::random_shuffle(permutation_.begin(), permutation_.end());
     if (enabled_) {
       state_ = State::FadeIn;
-      frame_ = 0;
+      state_frame_start_ = frame;
     } else {
       state_ = State::Off;
-      frame_ = 0;
+      state_frame_start_ = frame;
     }
-  } else if (state_ == State::ColorChange && frame_ >= COLOR_CHANGE_FRAMES) {
+  } else if (state_ == State::ColorChange &&
+             frame - state_frame_start_ >= COLOR_CHANGE_FRAMES) {
     state_ = State::FadeIn;
-    frame_ = 0;
+    state_frame_start_ = frame;
   }
 }
 
-void SoundGame::calc_frame(PicoLed::Color *strip_begin) {
-  uint8_t v = 0;
-  if (state_ == State::Off) {
-    v = 0;
-  } else if (state_ == State::FadeIn) {
-    v = gamma8[64 + static_cast<uint8_t>(64 * static_cast<float>(frame_) /
-                                         FADE_IN_FRAMES)];
-  } else if (state_ == State::Constant) {
-    v = gamma8[128];
-  } else if (state_ == State::FadeOut) {
-    v = gamma8[64 + static_cast<uint8_t>(64 - 64 * static_cast<float>(frame_) /
-                                                  FADE_OUT_FRAMES)];
-  } else if (state_ == State::ColorChange) {
-    if (frame_ < COLOR_CHANGE_IN) {
-      v = 0;
-    } else if (frame_ > COLOR_CHANGE_FRAMES - COLOR_CHANGE_OUT) {
-      v = 0;
-    } else {
-      v = 128;
-    }
-
-    if (((frame_ - COLOR_CHANGE_IN) % COLOR_CHANGE_CHANGE) == 0) {
-      std::random_shuffle(permutation_.begin(), permutation_.end());
-    }
-  }
-
+void SoundGame::calc_frame(uint32_t frame, PicoLed::Color *strip_begin,
+                           uint8_t buttons8) {
   for (int i = 0; i < 8; ++i) {
+    if (buttons8 & (1 << i)) {
+      pressed_button_ = i;
+      pressed_button_frame_ = frame;
+    }
+    uint8_t v = 0;
+    if (state_ == State::Off) {
+      v = 0;
+    } else if (state_ == State::FadeIn) {
+      v = gamma8[64 + static_cast<uint8_t>(
+                          64 * static_cast<float>(frame - state_frame_start_) /
+                          FADE_IN_FRAMES)];
+    } else if (state_ == State::Constant) {
+      v = gamma8[pressed_button_ == i ? 255 : 128];
+    } else if (state_ == State::FadeOut) {
+      v = gamma8[64 +
+                 static_cast<uint8_t>(
+                     64 - 64 * static_cast<float>(frame - state_frame_start_) /
+                              FADE_OUT_FRAMES)];
+    } else if (state_ == State::ColorChange) {
+      if (frame - state_frame_start_ < COLOR_CHANGE_IN) {
+        v = 0;
+      } else if (frame - state_frame_start_ >
+                 COLOR_CHANGE_FRAMES - COLOR_CHANGE_OUT) {
+        v = 0;
+      } else {
+        v = 128;
+      }
+
+      if (((frame - state_frame_start_ - COLOR_CHANGE_IN) %
+           COLOR_CHANGE_CHANGE) == 0) {
+        std::random_shuffle(permutation_.begin(), permutation_.end());
+      }
+    }
+
     auto const [r, g, b] = hsv_to_rgb(hues_[permutation_[i]], 1.0, v);
     *(strip_begin + i) = PicoLed::RGB(r, g, b);
   }
 
-  next_frame();
+  if (pressed_button_ >= 0 &&
+      frame > pressed_button_frame_ + PRESSED_HIGHLIGHT_TIME) {
+    pressed_button_ = -1;
+  }
+
+  next_frame(frame);
 }
 
 ArcadeSounds SoundGame::sound_for_button(uint8_t button) {
