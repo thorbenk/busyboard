@@ -35,17 +35,17 @@ void SoundGame::set_enabled(bool enabled) {
 }
 
 void SoundGame::next_frame(uint32_t frame) {
-  if (state_ == State::FadeIn && frame - state_frame_start_ >= FADE_IN_FRAMES) {
+  auto const frames_in_state = frame - state_frame_start_;
+
+  if (state_ == State::FadeIn && frames_in_state >= FADE_IN_FRAMES) {
     // reset to same permutation for now
     // std::iota(permutation_.begin(), permutation_.end(), 0);
     state_ = State::Constant;
     state_frame_start_ = frame;
-  } else if (state_ == State::Constant &&
-             frame - state_frame_start_ >= CONSTANT_FRAMES) {
+  } else if (state_ == State::Constant && frames_in_state >= CONSTANT_FRAMES) {
     state_ = State::FadeOut;
     state_frame_start_ = frame;
-  } else if (state_ == State::FadeOut &&
-             frame - state_frame_start_ >= FADE_OUT_FRAMES) {
+  } else if (state_ == State::FadeOut && frames_in_state >= FADE_OUT_FRAMES) {
     // state_ = State::ColorChange;
     // std::random_shuffle(permutation_.begin(), permutation_.end());
     if (enabled_) {
@@ -56,7 +56,7 @@ void SoundGame::next_frame(uint32_t frame) {
       state_frame_start_ = frame;
     }
   } else if (state_ == State::ColorChange &&
-             frame - state_frame_start_ >= COLOR_CHANGE_FRAMES) {
+             frames_in_state >= COLOR_CHANGE_FRAMES) {
     state_ = State::FadeIn;
     state_frame_start_ = frame;
   }
@@ -64,6 +64,9 @@ void SoundGame::next_frame(uint32_t frame) {
 
 void SoundGame::calc_frame(uint32_t frame, PicoLed::Color *strip_begin,
                            uint8_t buttons8) {
+
+  auto const frames_in_state = frame - state_frame_start_;
+
   for (int i = 0; i < 8; ++i) {
     if (buttons8 & (1 << i)) {
       pressed_button_ = i;
@@ -72,29 +75,28 @@ void SoundGame::calc_frame(uint32_t frame, PicoLed::Color *strip_begin,
     uint8_t v = 0;
     if (state_ == State::Off) {
       v = 0;
+    } else if (pressed_button_ == i) {
+      v = 255;
     } else if (state_ == State::FadeIn) {
-      v = gamma8[64 + static_cast<uint8_t>(
-                          64 * static_cast<float>(frame - state_frame_start_) /
-                          FADE_IN_FRAMES)];
-    } else if (state_ == State::Constant) {
-      v = gamma8[pressed_button_ == i ? 255 : 128];
-    } else if (state_ == State::FadeOut) {
       v = gamma8[64 +
-                 static_cast<uint8_t>(
-                     64 - 64 * static_cast<float>(frame - state_frame_start_) /
-                              FADE_OUT_FRAMES)];
+                 static_cast<uint8_t>(64 * static_cast<float>(frames_in_state) /
+                                      FADE_IN_FRAMES)];
+    } else if (state_ == State::Constant) {
+      v = gamma8[128];
+    } else if (state_ == State::FadeOut) {
+      v = gamma8[64 + static_cast<uint8_t>(
+                          64 - 64 * static_cast<float>(frames_in_state) /
+                                   FADE_OUT_FRAMES)];
     } else if (state_ == State::ColorChange) {
-      if (frame - state_frame_start_ < COLOR_CHANGE_IN) {
+      if (frames_in_state < COLOR_CHANGE_IN) {
         v = 0;
-      } else if (frame - state_frame_start_ >
-                 COLOR_CHANGE_FRAMES - COLOR_CHANGE_OUT) {
+      } else if (frames_in_state > COLOR_CHANGE_FRAMES - COLOR_CHANGE_OUT) {
         v = 0;
       } else {
         v = 128;
       }
 
-      if (((frame - state_frame_start_ - COLOR_CHANGE_IN) %
-           COLOR_CHANGE_CHANGE) == 0) {
+      if (((frames_in_state - COLOR_CHANGE_IN) % COLOR_CHANGE_CHANGE) == 0) {
         std::random_shuffle(permutation_.begin(), permutation_.end());
       }
     }
