@@ -1,10 +1,7 @@
 compile_commands.json
 build
 .cache
+sounds/04/*.wav
 
 tmp
-sounds/01
-sounds/02
-sounds/03
-sounds/04
 107-Free-Retro-Game-Sounds.zip
